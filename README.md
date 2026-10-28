@@ -5,7 +5,24 @@ la terminal correcta sin cambiar de ventana.
 
 ![La pilita](assets/icon.png)
 
-> En desarrollo. Ver `docs/SPEC.md` para el alcance de la v1 y `docs/PLAN.md` para el avance.
+La última versión está en
+[GitHub Releases](https://github.com/HurgotDev/pilas-app/releases). El
+alcance de la v1 está en `docs/SPEC.md` y el avance en `docs/PLAN.md`.
+
+## Qué hace
+
+- Una isla en el notch (o en el borde superior de la pantalla) con la
+  pilita, que cambia de estado: dormida, cargando, alerta y llena.
+- Lista de sesiones de Claude Code con su estado y última acción.
+- Aprobar permisos (**Allow**, **Deny**, **Always**) y responder las
+  preguntas de Claude Code sin cambiar de ventana, o devolverlas a la
+  terminal.
+- Un clic en una sesión salta a su pestaña exacta de Ghostty; con otras
+  terminales, trae la app al frente.
+- Sonidos 8-bit opcionales, interfaz en inglés y español.
+
+Privacidad: sin cuentas ni telemetría. La única conexión a internet es la
+búsqueda de actualizaciones, que se puede desactivar.
 
 ## Instalación
 
@@ -46,8 +63,8 @@ Code. Después, el icono de la pilita en la barra de menú da acceso a
 
 Pilas busca actualizaciones al arrancar y cada 24 horas, y avisa en el
 menú de la barra y en Ajustes. No instala nada sin que lo pidas. Para
-desactivar la búsqueda, quita la casilla **Buscar actualizaciones
-automáticamente** en **Settings…**.
+desactivar la búsqueda, quita la casilla **Check for updates
+automatically** (Buscar actualizaciones automáticamente) en **Settings…**.
 
 Para desinstalar, abre **Settings…** y pulsa **Disconnect** (Desconectar) para
 quitar los hooks de `~/.claude/settings.json`. Luego borra `Pilas.app` y la
@@ -63,7 +80,10 @@ carpeta `~/Library/Application Support/Pilas`.
 ```bash
 npm install
 npm run app          # abre Pilas en modo desarrollo
-cargo test --workspace --exclude pilas
+npm run build        # la app necesita dist/ para compilar y pasar tests
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
+npm run typecheck && npm run test:scripts
 ```
 
 Para probar los hooks sin afectar tus propias sesiones de Claude Code, sigue `docs/HOOKS-DEV.md`.
