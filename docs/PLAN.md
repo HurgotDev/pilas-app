@@ -59,5 +59,5 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
   y sonido: activado + volumen vía `configure()`).
 
 ## M8 · Publicación
-- [ ] Workflow de release con `.dmg` universal en GitHub Actions.
+- [x] Workflow de release con `.dmg` universal en GitHub Actions.
 - [x] README con instrucciones para abrir una app sin notarizar.
