@@ -53,9 +53,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] Fallo cerrado: sin coincidencia segura, solo `activate`.
 
 ## M7 · Instalador, onboarding y ajustes
-- [ ] Copiar `pilas-hook` a `~/Library/Application Support/Pilas/bin/`.
-- [ ] Instalar hooks en `~/.claude/settings.json` con backup fechado, diff previo y sin tocar hooks ajenos.
-- [ ] Reparar y desinstalar solo las entradas de Pilas. Onboarding de 4 pasos. Ajustes en JSON (incluye idioma
+- [x] Copiar `pilas-hook` a `~/Library/Application Support/Pilas/bin/`.
+- [x] Instalar hooks en `~/.claude/settings.json` con backup fechado, diff previo y sin tocar hooks ajenos.
+- [x] Reparar y desinstalar solo las entradas de Pilas. Onboarding de 4 pasos. Ajustes en JSON (incluye idioma
   y sonido: activado + volumen vía `configure()`).
 
 ## M8 · Publicación
