@@ -120,12 +120,10 @@ export function mountIsland(root: HTMLElement): void {
   window.addEventListener("blur", () => {
     if (open) { open = false; render(); }
   });
-  // Con la isla oculta, el cursor sobre su franja la muestra un momento.
-  root.addEventListener("mouseenter", () => {
-    if (size() === "hidden") { peek = true; render(); }
-  });
-  root.addEventListener("mouseleave", () => {
-    if (peek) { peek = false; render(); }
+  // Con la isla oculta, el cursor sobre su franja la muestra un momento (aviso nativo: la app no está activa).
+  api.onHover((inside) => {
+    if (inside && size() === "hidden") { peek = true; render(); }
+    else if (!inside && peek) { peek = false; render(); }
   });
 
   api.onSnapshot((s) => { snap = s; if (s.pending.length === 0 && s.sessions.length === 0) open = false; render(); });

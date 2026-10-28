@@ -24,4 +24,4 @@ pilas-jump = { path = "../crates/pilas-jump" }
 objc2 = "0.6.5"
 block2 = "0.6.2"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSGeometry", "NSNotification", "NSOperation", "NSString", "block2"] }
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSPanel", "NSScreen", "NSWindow"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSApplication", "NSEvent", "NSPanel", "NSScreen", "NSTrackingArea", "NSView", "NSWindow"] }

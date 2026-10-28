@@ -100,15 +100,16 @@ pub fn island_frame(screen: &ScreenInfo, mode: IslandMode, open_height: f64) -> 
 mod imp {
     use super::{island_frame, pick_screen, IslandMode, Rect, ScreenChoice, ScreenInfo, OPEN_MAX_H};
     use block2::RcBlock;
-    use objc2::runtime::AnyObject;
-    use objc2::{define_class, ffi, ClassType, MainThreadMarker};
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, NSObject};
+    use objc2::{define_class, ffi, msg_send, AnyThread, ClassType, DefinedClass, MainThreadMarker};
     use objc2_app_kit::{
-        NSApplicationDidChangeScreenParametersNotification, NSMainMenuWindowLevel, NSPanel, NSScreen, NSWindow,
-        NSWindowCollectionBehavior, NSWindowStyleMask,
+        NSApplicationDidChangeScreenParametersNotification, NSEvent, NSMainMenuWindowLevel, NSPanel, NSScreen,
+        NSTrackingArea, NSTrackingAreaOptions, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
     };
     use objc2_foundation::{NSNotification, NSNotificationCenter, NSPoint, NSRect, NSSize};
     use std::ptr::NonNull;
-    use tauri::{AppHandle, Manager, WebviewWindow};
+    use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
     define_class!(
         /// NSWindow que puede ser clave (recibir teclado) sin activar la app.
@@ -123,6 +124,55 @@ mod imp {
             }
         }
     );
+
+    struct HoverOwnerIvars {
+        app: AppHandle,
+    }
+
+    define_class!(
+        /// Dueño del área de seguimiento: avisa a la UI cuando el cursor entra o sale de la ventana.
+        #[unsafe(super(NSObject))]
+        #[name = "PilasHoverOwner"]
+        #[ivars = HoverOwnerIvars]
+        struct HoverOwner;
+
+        impl HoverOwner {
+            #[unsafe(method(mouseEntered:))]
+            fn mouse_entered(&self, _event: &NSEvent) {
+                let _ = self.ivars().app.emit("pilas://hover", true);
+            }
+
+            #[unsafe(method(mouseExited:))]
+            fn mouse_exited(&self, _event: &NSEvent) {
+                let _ = self.ivars().app.emit("pilas://hover", false);
+            }
+        }
+    );
+
+    /// Área de seguimiento sobre todo el contenido: funciona aunque la app no esté activa
+    /// (WKWebView no emite mouseenter/mouseleave del DOM en ese caso).
+    ///
+    /// # Safety
+    /// Debe llamarse en el hilo principal con la ventana ya convertida en panel.
+    unsafe fn install_hover_tracking(window: &NSWindow, app: AppHandle) {
+        let Some(view) = window.contentView() else { return };
+        let owner = HoverOwner::alloc().set_ivars(HoverOwnerIvars { app });
+        let owner: Retained<HoverOwner> = msg_send![super(owner), init];
+        let options = NSTrackingAreaOptions::MouseEnteredAndExited
+            | NSTrackingAreaOptions::ActiveAlways
+            | NSTrackingAreaOptions::InVisibleRect;
+        let owner_obj: &AnyObject = &owner;
+        let area = NSTrackingArea::initWithRect_options_owner_userInfo(
+            NSTrackingArea::alloc(),
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0)),
+            options,
+            Some(owner_obj),
+            None,
+        );
+        view.addTrackingArea(&area);
+        // El área no retiene a su dueño: el dueño vive con la app.
+        std::mem::forget(owner);
+    }
 
     fn from_ns(r: NSRect) -> Rect {
         Rect {
@@ -175,6 +225,7 @@ mod imp {
             );
             w.setHidesOnDeactivate(false);
             w.setAcceptsMouseMovedEvents(true);
+            install_hover_tracking(w, window.app_handle().clone());
         }
     }
 

@@ -9,11 +9,11 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] `npm run app` abre la ventana transparente sin ícono en el Dock.
 
 ## M1 · La isla en su sitio (riesgo alto: hacerlo primero)
-- [ ] Convertir la ventana en `NSPanel`: nivel por encima de la barra de menú, en todos los Spaces, sin robar foco.
+- [x] Convertir la ventana en `NSPanel`: nivel por encima de la barra de menú, en todos los Spaces, sin robar foco.
       Evaluar `tauri-nspanel` (comunidad) y, si no basta, un módulo propio con `objc2`.
-- [ ] Posicionar sobre el notch de la pantalla del MacBook; en un monitor externo principal, centrada bajo la barra de menú.
-- [ ] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
-- [ ] Click-through fuera de la píldora y área de hover de 6 px cuando está oculta.
+- [x] Posicionar sobre el notch de la pantalla del MacBook; en un monitor externo principal, centrada bajo la barra de menú.
+- [x] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
+- [x] Click-through fuera de la píldora y área de hover de 6 px cuando está oculta.
 - Prueba: escribir en otra app mientras la isla cambia de tamaño; el foco nunca se pierde.
 
 ## M2 · Hook y sesiones de punta a punta

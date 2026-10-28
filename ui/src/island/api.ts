@@ -45,4 +45,5 @@ export const setIslandMode = (mode: "hidden" | "pill" | "open", openHeight?: num
 
 export const onSnapshot = (cb: (s: Snapshot) => void) => listen<Snapshot>("pilas://snapshot", (e) => cb(e.payload));
 export const onPending = (cb: (requestId: string) => void) => listen<string>("pilas://pending", (e) => cb(e.payload));
+export const onHover = (cb: (inside: boolean) => void) => listen<boolean>("pilas://hover", (e) => cb(e.payload));
 export const onFinished = (cb: (sessionId: string) => void) => listen<string>("pilas://finished", (e) => cb(e.payload));
