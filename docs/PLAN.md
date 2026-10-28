@@ -43,8 +43,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] "Denied from Pilas" fijo en inglés.
 
 ## M5 · La pilita y los sonidos
-- [ ] Estados y reacciones integrados con la prioridad Alerta > Llena > Cargando > Dormida.
-- [ ] Sonidos con ajuste de activado y volumen; un solo recordatorio a los 60 s de un pendiente.
+- [x] Estados y reacciones integrados con la prioridad Alerta > Llena > Cargando > Dormida.
+- [x] Sonidos con ajuste de activado y volumen (`configure()` en `sfx.ts`;
+  se persiste en M7); un solo recordatorio a los 60 s de un pendiente.
 
 ## M6 · Saltar a Ghostty
 - [ ] Verificar en Script Editor (Ghostty.sdef) si cada terminal expone su TTY; si sí, emparejar por TTY.
@@ -54,7 +55,8 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 ## M7 · Instalador, onboarding y ajustes
 - [ ] Copiar `pilas-hook` a `~/Library/Application Support/Pilas/bin/`.
 - [ ] Instalar hooks en `~/.claude/settings.json` con backup fechado, diff previo y sin tocar hooks ajenos.
-- [ ] Reparar y desinstalar solo las entradas de Pilas. Onboarding de 4 pasos. Ajustes en JSON (incluye idioma).
+- [ ] Reparar y desinstalar solo las entradas de Pilas. Onboarding de 4 pasos. Ajustes en JSON (incluye idioma
+  y sonido: activado + volumen vía `configure()`).
 
 ## M8 · Publicación
 - [ ] Workflow de release con `.dmg` universal en GitHub Actions.

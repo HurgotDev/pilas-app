@@ -331,6 +331,7 @@ export function mountIsland(root: HTMLElement): void {
   });
 
   mascot.addEventListener("pilita-click", () => {
+    if (mascot.state !== "alerta") play("toque"); // en alerta no hay reacciones ni sonido de toque
     open = !open;
     render();
   });
@@ -349,12 +350,22 @@ export function mountIsland(root: HTMLElement): void {
   });
   // Con la isla oculta, el cursor sobre su franja la muestra un momento (aviso nativo: la app no está activa).
   api.onHover((inside) => {
+    if (inside) mascot.react("saludo");
     if (inside && size() === "hidden") { peek = true; render(); }
     else if (!inside && peek) { peek = false; render(); }
   });
 
   api.onSnapshot((s) => { snap = s; if (s.pending.length === 0 && s.sessions.length === 0) open = false; render(); });
-  api.onPending(() => { open = true; play("alerta"); render(); });
+  // Recordatorio una sola vez por request_id, a los 60 s, solo si sigue pendiente.
+  const reminded = new Set<string>();
+  api.onPending((requestId) => {
+    open = true; play("alerta"); render();
+    if (reminded.has(requestId)) return;
+    reminded.add(requestId);
+    setTimeout(() => {
+      if (snap.pending.some((p) => p.request_id === requestId)) play("recordatorio");
+    }, 60_000);
+  });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
   api.getSnapshot().then((s) => { snap = s; render(); });
   // Refresca los "hace N min" mientras la lista está abierta.
