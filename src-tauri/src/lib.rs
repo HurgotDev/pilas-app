@@ -4,8 +4,10 @@
 //! - comandos para la WebView y eventos hacia ella,
 //! - (M1) comportamiento de la ventana como panel del notch.
 
+mod hooks;
 mod panel;
 mod server;
+mod settings;
 
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
@@ -14,7 +16,9 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{mpsc, Mutex};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 /// Qué le llega al hilo de una conexión que espera decisión.
 pub(crate) enum Outcome {
@@ -247,12 +251,97 @@ fn spawn_prune(app: AppHandle) {
     });
 }
 
+#[tauri::command]
+fn get_settings() -> settings::Settings {
+    settings::load()
+}
+
+/// Persiste, recoloca la isla, sincroniza el LaunchAgent y avisa a todas las ventanas.
+#[tauri::command]
+fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::Settings) -> Result<(), String> {
+    settings::save(&settings)?;
+    state.0.lock().unwrap().screen = settings.screen.clone();
+    apply_layout(&app);
+    settings::sync_launch_agent(settings.launch_at_login)?;
+    let _ = app.emit("pilas://settings", &settings);
+    Ok(())
+}
+
+/// Async a propósito: un comando síncrono corre en el hilo principal y bloquearía `screen_names`.
+#[tauri::command]
+async fn list_screens(app: AppHandle) -> Vec<String> {
+    panel::screen_names(&app)
+}
+
+#[tauri::command]
+fn hooks_status() -> hooks::HooksInfo {
+    hooks::info()
+}
+
+#[tauri::command]
+fn preview_hooks(action: String) -> Result<Vec<pilas_core::installer::DiffLine>, String> {
+    hooks::preview(hooks::Action::parse(&action)?)
+}
+
+/// Devuelve la ruta del backup si se escribió `settings.json` y ya existía.
+#[tauri::command]
+fn apply_hooks(action: String) -> Result<Option<String>, String> {
+    let backup = hooks::apply(hooks::Action::parse(&action)?)?;
+    Ok(backup.map(|p| p.display().to_string()))
+}
+
+#[tauri::command]
+fn open_settings(app: AppHandle) -> Result<(), String> {
+    open_settings_window(&app).map_err(|e| e.to_string())
+}
+
+/// Muestra la ventana de ajustes, o la crea si no existe.
+fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("settings") {
+        window.show()?;
+        return window.set_focus();
+    }
+    WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+        .title("Pilas")
+        .inner_size(520.0, 560.0)
+        .resizable(false)
+        .center()
+        .build()?;
+    Ok(())
+}
+
+/// Icono de la barra de menú: abrir ajustes o salir.
+fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
+    // shortcut: etiquetas en inglés porque el backend no tiene i18n; traducir cuando haya más textos nativos
+    let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit Pilas", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
+    let mut tray = TrayIconBuilder::new()
+        .menu(&menu)
+        .icon_as_template(true)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "settings" => {
+                let _ = open_settings_window(app);
+            }
+            "quit" => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    Ok(())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory); // sin ícono en el Dock
+
+            let settings = settings::load();
+            app.state::<AppState>().0.lock().unwrap().screen = settings.screen.clone();
 
             if let Some(window) = app.get_webview_window("island") {
                 panel::make_panel(&window);
@@ -263,6 +352,12 @@ pub fn run() {
 
             server::start(app.handle().clone())?;
             spawn_prune(app.handle().clone());
+            setup_tray(app.handle())?;
+
+            // Oferta de reparación al arrancar: primera vez, o hooks que no están bien.
+            if !settings.onboarded || hooks::info().status != "ok" {
+                let _ = open_settings_window(app.handle());
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -270,7 +365,14 @@ pub fn run() {
             resolve_permission,
             answer_question,
             jump_to_session,
-            set_island_mode
+            set_island_mode,
+            get_settings,
+            set_settings,
+            list_screens,
+            hooks_status,
+            preview_hooks,
+            apply_hooks,
+            open_settings
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Pilas");

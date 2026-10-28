@@ -1,8 +1,8 @@
 // Isla mínima funcional (M2/M3): píldora, lista de sesiones y tarjeta de permiso.
 import type { PilitaMascot, PilitaState } from "../mascot/pilita";
-import { play } from "../sound/sfx";
+import { configure, play } from "../sound/sfx";
 import * as api from "./api";
-import { t, type Key } from "../i18n";
+import { setLang, t, type Key } from "../i18n";
 
 type Size = "hidden" | "pill" | "open";
 
@@ -98,6 +98,7 @@ export function mountIsland(root: HTMLElement): void {
   let expanded: string | null = null; // detalle expandido ("ver más")
   // Progreso de AskUserQuestion: paso actual y elecciones por pregunta; se reinicia si cambia la tarjeta.
   let qCard: { id: string; step: number; picks: string[][] } | null = null;
+  let openOnPending = true; // ajuste "Abrir la isla al llegar una solicitud"
 
   root.innerHTML = `
     <div class="pill">
@@ -365,7 +366,8 @@ export function mountIsland(root: HTMLElement): void {
   // Recordatorio una sola vez por request_id, a los 60 s, solo si sigue pendiente.
   const reminded = new Set<string>();
   api.onPending((requestId) => {
-    open = true; play("alerta"); render();
+    if (openOnPending) open = true;
+    play("alerta"); render();
     if (reminded.has(requestId)) return;
     reminded.add(requestId);
     setTimeout(() => {
@@ -373,6 +375,15 @@ export function mountIsland(root: HTMLElement): void {
     }, 60_000);
   });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
+  // Ajustes: idioma, sonido y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
+  function applySettings(s: api.Settings): void {
+    setLang(s.lang);
+    configure({ enabled: s.sound_enabled, volume: s.volume });
+    openOnPending = s.open_on_pending;
+    render();
+  }
+  api.getSettings().then(applySettings);
+  api.onSettings(applySettings);
   api.getSnapshot().then((s) => { snap = s; render(); });
   // Refresca los "hace N min" mientras la lista está abierta.
   setInterval(() => { if (open) render(); }, 30_000);

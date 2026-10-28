@@ -14,6 +14,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "ui/index.html"),
         playground: resolve(__dirname, "ui/playground.html"),
+        settings: resolve(__dirname, "ui/settings.html"),
       },
     },
   },

@@ -38,6 +38,42 @@ const en = {
   "act.question": "Has a question",
   "act.other": "Using {arg}",
   "arg.command": "a command",
+  "btn.cancel": "Cancel",
+  "set.title": "Pilas settings",
+  "set.hooks": "Claude Code",
+  "set.screen": "Screen",
+  "set.screen.main": "Main screen",
+  "set.screen.notch": "Notch screen",
+  "set.sounds": "Sounds",
+  "set.volume": "Volume",
+  "set.open_on_pending": "Open the island when a request arrives",
+  "set.launch_at_login": "Launch at login",
+  "set.language": "Language",
+  "set.lang.system": "System",
+  "set.lang.en": "English",
+  "set.lang.es": "Español",
+  "set.loading": "Loading…",
+  "hooks.ok": "Connected",
+  "hooks.missing": "Not connected",
+  "hooks.needs_repair": "Needs repair",
+  "hooks.invalid_json": "Settings file is not valid JSON",
+  "hooks.connect": "Connect",
+  "hooks.repair": "Repair",
+  "hooks.disconnect": "Disconnect",
+  "hooks.apply": "Apply changes",
+  "hooks.backup": "Backup: {path}",
+  "hooks.unchanged": "… {n} unchanged lines",
+  "onb.step": "Step {i} of {n}",
+  "onb.welcome.title": "Welcome to Pilas",
+  "onb.welcome.body": "Pilas lives in the notch and tells you when Claude Code needs you. Approve permissions and answer questions without leaving your window.",
+  "onb.connect.title": "Connect to Claude Code",
+  "onb.connect.body": "Pilas adds its hooks to this file. Your other hooks stay as they are, and a dated backup is kept first.",
+  "onb.skip": "Skip",
+  "onb.automation.title": "Automation permission",
+  "onb.automation.body": "The first time you jump to a session, macOS asks permission to control Ghostty. Pilas only uses it to focus the right tab.",
+  "onb.restart.title": "Restart open sessions",
+  "onb.restart.body": "Claude Code sessions that were already open need a restart to pick up the hooks. New sessions work right away.",
+  "onb.done": "Done",
 };
 
 const es: Record<keyof typeof en, string> = {
@@ -77,6 +113,42 @@ const es: Record<keyof typeof en, string> = {
   "act.question": "Tiene una pregunta",
   "act.other": "Usando {arg}",
   "arg.command": "un comando",
+  "btn.cancel": "Cancelar",
+  "set.title": "Ajustes de Pilas",
+  "set.hooks": "Claude Code",
+  "set.screen": "Pantalla",
+  "set.screen.main": "Pantalla principal",
+  "set.screen.notch": "Pantalla del notch",
+  "set.sounds": "Sonidos",
+  "set.volume": "Volumen",
+  "set.open_on_pending": "Abrir la isla al llegar una solicitud",
+  "set.launch_at_login": "Iniciar con el sistema",
+  "set.language": "Idioma",
+  "set.lang.system": "Del sistema",
+  "set.lang.en": "English",
+  "set.lang.es": "Español",
+  "set.loading": "Cargando…",
+  "hooks.ok": "Conectado",
+  "hooks.missing": "No conectado",
+  "hooks.needs_repair": "Necesita reparación",
+  "hooks.invalid_json": "El archivo de ajustes no es JSON válido",
+  "hooks.connect": "Conectar",
+  "hooks.repair": "Reparar",
+  "hooks.disconnect": "Desconectar",
+  "hooks.apply": "Aplicar cambios",
+  "hooks.backup": "Copia de seguridad: {path}",
+  "hooks.unchanged": "… {n} líneas sin cambios",
+  "onb.step": "Paso {i} de {n}",
+  "onb.welcome.title": "Bienvenido a Pilas",
+  "onb.welcome.body": "Pilas vive en el notch y te avisa cuando Claude Code te necesita. Aprueba permisos y responde preguntas sin salir de tu ventana.",
+  "onb.connect.title": "Conectar con Claude Code",
+  "onb.connect.body": "Pilas añade sus hooks a este archivo. Tus otros hooks se quedan como están, y antes se guarda una copia con fecha.",
+  "onb.skip": "Omitir",
+  "onb.automation.title": "Permiso de automatización",
+  "onb.automation.body": "La primera vez que saltes a una sesión, macOS pedirá permiso para controlar Ghostty. Pilas solo lo usa para enfocar la pestaña correcta.",
+  "onb.restart.title": "Reinicia las sesiones abiertas",
+  "onb.restart.body": "Las sesiones de Claude Code que ya estaban abiertas necesitan reiniciarse para usar los hooks. Las nuevas funcionan al momento.",
+  "onb.done": "Listo",
 };
 
 export type Key = keyof typeof en;
@@ -84,7 +156,15 @@ export type Key = keyof typeof en;
 const dict = { en, es };
 
 /** Idioma del sistema: `es*` → español, el resto → inglés. */
-export const lang: Lang = navigator.language.startsWith("es") ? "es" : "en";
+const systemLang: Lang = navigator.language.startsWith("es") ? "es" : "en";
+/** Idioma activo; `let` para que los importadores vean el cambio de `setLang`. */
+export let lang: Lang = systemLang;
+
+/** Fija el idioma de Ajustes; `null` vuelve al del sistema. */
+export function setLang(l: Lang | null): void {
+  lang = l ?? systemLang;
+  document.documentElement.lang = lang;
+}
 
 /** Traduce `key` y reemplaza `{name}` por `vars.name`. */
 export function t(key: Key, vars: Record<string, string | number> = {}): string {

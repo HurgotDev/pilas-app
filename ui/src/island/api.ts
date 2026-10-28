@@ -53,3 +53,37 @@ export const onSnapshot = (cb: (s: Snapshot) => void) => listen<Snapshot>("pilas
 export const onPending = (cb: (requestId: string) => void) => listen<string>("pilas://pending", (e) => cb(e.payload));
 export const onHover = (cb: (inside: boolean) => void) => listen<boolean>("pilas://hover", (e) => cb(e.payload));
 export const onFinished = (cb: (sessionId: string) => void) => listen<string>("pilas://finished", (e) => cb(e.payload));
+
+// Ajustes y instalador: tipos reflejan el contrato del backend (docs/SPEC.md → Instalación, ajustes y onboarding).
+export type ScreenChoice = "main" | "notch" | { named: string };
+
+export interface Settings {
+  screen: ScreenChoice;
+  sound_enabled: boolean;
+  volume: number; // 0..1
+  open_on_pending: boolean;
+  launch_at_login: boolean;
+  lang: "en" | "es" | null; // null = idioma del sistema
+  onboarded: boolean;
+}
+
+export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";
+export interface HooksInfo {
+  status: HookStatus;
+  settings_path: string;
+}
+export type HookAction = "install" | "uninstall";
+export interface DiffLine {
+  op: " " | "+" | "-";
+  text: string;
+}
+
+export const getSettings = () => invoke<Settings>("get_settings");
+export const setSettings = (settings: Settings) => invoke<void>("set_settings", { settings });
+export const listScreens = () => invoke<string[]>("list_screens");
+export const hooksStatus = () => invoke<HooksInfo>("hooks_status");
+/** Rechaza con un texto de error (p. ej. JSON inválido). */
+export const previewHooks = (action: HookAction) => invoke<DiffLine[]>("preview_hooks", { action });
+/** Devuelve la ruta del backup, o `null` si no había nada que respaldar. */
+export const applyHooks = (action: HookAction) => invoke<string | null>("apply_hooks", { action });
+export const onSettings = (cb: (s: Settings) => void) => listen<Settings>("pilas://settings", (e) => cb(e.payload));

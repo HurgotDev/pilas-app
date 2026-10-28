@@ -46,3 +46,18 @@ echo '{"session_id":"s1","cwd":"/tmp/demo","hook_event_name":"PermissionRequest"
 
 - Con la app cerrada, el hook debe terminar al instante y sin salida: `echo '{}' | pilas-hook; echo $?` → `0`.
 - Si un hook "no hace nada", ejecuta Claude Code con `claude --debug` y revisa el log de hooks.
+
+## Probar el instalador sin tocar tu configuración
+
+El instalador de la app escribe en `~/.claude/settings.json`. Para probarlo,
+apunta `PILAS_CLAUDE_SETTINGS` a un archivo de prueba antes de abrir la app:
+
+```bash
+echo '{ "theme": "dark" }' > /tmp/claude-test.json
+cargo build -p pilas-hook   # el instalador copia target/debug/pilas-hook
+PILAS_CLAUDE_SETTINGS=/tmp/claude-test.json npm run app
+```
+
+Desde la ventana de ajustes verás el diff; al aplicarlo se crea
+`/tmp/claude-test.json.pilas-backup-AAAAMMDD-HHMMSS`. Sin la variable, la app
+usa tu configuración real.

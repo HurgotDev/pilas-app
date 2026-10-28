@@ -9,7 +9,7 @@
 
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const OPEN_W: f64 = 420.0;
 const OPEN_MAX_H: f64 = 360.0;
@@ -30,9 +30,9 @@ pub enum IslandMode {
     Open,
 }
 
-/// Pantalla donde vive la isla. Por ahora solo `Main`; M7 lo leerá de los ajustes.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Default, PartialEq)]
+/// Pantalla donde vive la isla. Se guarda en los ajustes: `"main"`, `"notch"` o `{ "named": "<nombre>" }`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ScreenChoice {
     /// La que tiene la barra de menú (índice 0 de `NSScreen.screens`).
     #[default]
@@ -249,6 +249,22 @@ mod imp {
         });
     }
 
+    /// Nombres de las pantallas (`localizedName`), en el orden de `NSScreen.screens`.
+    /// Pide el dato al hilo principal; no llamar desde él (bloquearía).
+    pub fn screen_names(app: &AppHandle) -> Vec<String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = app.run_on_main_thread(move || {
+            let names = MainThreadMarker::new()
+                .map(read_screens)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| s.name)
+                .collect();
+            let _ = tx.send(names);
+        });
+        rx.recv().unwrap_or_default()
+    }
+
     /// Llama a `on_change` cuando cambian las pantallas (monitor conectado, resolución…).
     pub fn watch_screens(on_change: impl Fn() + 'static) {
         let block = RcBlock::new(move |_: NonNull<NSNotification>| on_change());
@@ -275,9 +291,13 @@ mod imp {
     pub fn place(_app: &AppHandle, _screen: ScreenChoice, _mode: IslandMode, _open_height: Option<f64>) {}
 
     pub fn watch_screens(_on_change: impl Fn() + 'static) {}
+
+    pub fn screen_names(_app: &AppHandle) -> Vec<String> {
+        Vec::new()
+    }
 }
 
-pub use imp::{make_panel, place, watch_screens};
+pub use imp::{make_panel, place, screen_names, watch_screens};
 
 #[cfg(test)]
 mod tests {

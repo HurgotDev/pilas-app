@@ -1,0 +1,81 @@
+/* Ventana normal de macOS (~520x560): claro y oscuro según el sistema, tipografía del sistema. */
+:root {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --fg: #1d1d1f;
+  --muted: #6e6e73;
+  --line: #d2d2d7;
+  --accent: #4f7df3;
+  --ok: #248a3d;
+  --warn: #b25000;
+  --add: #1a7f37;
+  --del: #cf222e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e20;
+    --card: #2c2c2e;
+    --fg: #f5f5f7;
+    --muted: #98989d;
+    --line: #3a3a3c;
+    --ok: #30d158;
+    --warn: #ff9f0a;
+    --add: #30d158;
+    --del: #ff6961;
+  }
+}
+
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+h1 { font-size: 20px; font-weight: 600; margin: 8px 0 4px; }
+h2 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 6px 4px; }
+p { margin: 0; }
+.muted, .path { color: var(--muted); }
+.path { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; }
+.error { color: var(--del); }
+
+.page { box-sizing: border-box; min-height: 100vh; max-width: 480px; margin: 0 auto; padding: 24px 20px;
+        display: flex; flex-direction: column; gap: 16px; }
+.step { display: flex; flex-direction: column; gap: 10px; }
+.hero { height: 96px; align-self: center; margin-bottom: 4px; }
+
+/* Onboarding: indicador de paso y navegación al pie. */
+.steps { display: flex; gap: 6px; justify-content: center; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.dot.on { background: var(--accent); }
+.nav { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+.nav > span { width: 1px; }
+
+/* Grupos de ajustes: tarjetas con filas separadas por líneas. */
+.group { background: var(--card); border-radius: 10px; padding: 2px 14px; display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; min-height: 22px;
+       border-top: 1px solid var(--line); }
+.group > .row:first-child { border-top: 0; }
+.row.block { flex-direction: column; align-items: stretch; gap: 8px; }
+.row select { font: inherit; }
+.vol { display: flex; align-items: center; gap: 8px; }
+.vol output { min-width: 2.5em; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.status { font-weight: 600; }
+.s-ok { color: var(--ok); }
+.s-needs_repair, .s-invalid_json { color: var(--warn); }
+.s-missing { color: var(--muted); }
+.btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+button { font: inherit; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--card);
+         color: var(--fg); cursor: pointer; }
+button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+button:disabled { opacity: .45; cursor: default; }
+button.link, .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Bloque de diff: monoespaciado; + en verde, - en rojo, líneas sin cambios atenuadas. */
+.diff { font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg); border-radius: 8px;
+        padding: 8px 10px; overflow-x: auto; white-space: pre; max-height: 220px; overflow-y: auto; }
+.diff .add { color: var(--add); }
+.diff .del { color: var(--del); }
+.diff .ctx { color: var(--muted); }
+
+input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+input[type="range"] { accent-color: var(--accent); width: 160px; }
+select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
