@@ -312,25 +312,67 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
 }
 
 /// Lado en píxeles del icono de la barra de menú (18 pt a 2x).
-const TRAY_LADO: usize = 36;
+const TRAY_SIZE: usize = 36;
+/// Margen en píxeles entre la mascota y el borde del icono.
+const TRAY_MARGIN: f64 = 1.0;
+/// Submuestras por eje para el antialias (4x4 da 17 niveles de cobertura).
+const TRAY_SUB: usize = 4;
+/// Ojos un 20 % mayores que en el SVG: a 18 pt los agujeros se perderían.
+const EYE_SCALE: f64 = 1.2;
+/// Caja de la silueta en unidades del viewBox (144x156) de `ui/src/mascot/pilita.ts`:
+/// x0, y0, x1, y1 (sin contar el brazo, que no cabe en el icono).
+const PILITA_BOX: (f64, f64, f64, f64) = (22.0, 18.0, 118.0, 151.0);
 
-/// Icono de plantilla de la pila: macOS usa solo el alfa, así que el color da igual.
-fn tray_icon() -> Image<'static> {
-    // Rectángulos inclusivos (x0, y0, x1, y1) en píxeles.
-    let dentro =
-        |x: usize, y: usize, (x0, y0, x1, y1): (usize, usize, usize, usize)| x >= x0 && x <= x1 && y >= y0 && y <= y1;
-    let mut rgba = vec![0u8; TRAY_LADO * TRAY_LADO * 4];
-    for y in 0..TRAY_LADO {
-        for x in 0..TRAY_LADO {
-            let marco = dentro(x, y, (2, 10, 30, 25)) && !dentro(x, y, (4, 12, 28, 23));
-            let borne = dentro(x, y, (31, 15, 33, 20));
-            let carga = dentro(x, y, (9, 15, 14, 20)) || dentro(x, y, (18, 15, 23, 20));
-            if marco || borne || carga {
-                rgba[(y * TRAY_LADO + x) * 4 + 3] = 255;
+/// Escala y desplazamiento (s, ox, oy) con los que px = ox + u * s, py = oy + v * s.
+fn tray_map() -> (f64, f64, f64) {
+    let (x0, y0, x1, y1) = PILITA_BOX;
+    let size = TRAY_SIZE as f64;
+    let s = (size - 2.0 * TRAY_MARGIN) / (y1 - y0);
+    let ox = (size - (x1 - x0) * s) / 2.0 - x0 * s;
+    let oy = TRAY_MARGIN - y0 * s;
+    (s, ox, oy)
+}
+
+/// ¿Cae el punto (u, v) del viewBox dentro de la pilita, fuera de los ojos?
+fn pilita_contains(u: f64, v: f64) -> bool {
+    // Rectángulo redondeado (x0, y0, x1, y1, radio), igual que el `rect` del SVG.
+    let in_rect = |(x0, y0, x1, y1, r): (f64, f64, f64, f64, f64)| {
+        let dx = ((u - (x0 + x1) / 2.0).abs() - ((x1 - x0) / 2.0 - r)).max(0.0);
+        let dy = ((v - (y0 + y1) / 2.0).abs() - ((y1 - y0) / 2.0 - r)).max(0.0);
+        dx * dx + dy * dy <= r * r
+    };
+    let in_ellipse = |cx: f64, cy: f64, rx: f64, ry: f64| ((u - cx) / rx).powi(2) + ((v - cy) / ry).powi(2) <= 1.0;
+    let body = in_rect((22.0, 30.0, 118.0, 142.0, 38.0)) || in_rect((55.0, 18.0, 85.0, 36.0, 7.0));
+    let feet = in_ellipse(52.0, 144.0, 11.0, 7.0) || in_ellipse(88.0, 144.0, 11.0, 7.0);
+    let eye = |cx: f64| in_ellipse(cx, 72.0, 9.0 * EYE_SCALE, 12.0 * EYE_SCALE);
+    (body || feet) && !eye(52.0) && !eye(88.0)
+}
+
+/// Alfa de cada píxel del icono: cobertura de la silueta con supermuestreo.
+fn tray_alpha() -> Vec<u8> {
+    let (s, ox, oy) = tray_map();
+    let n = (TRAY_SUB * TRAY_SUB) as u32;
+    let mut alpha = vec![0u8; TRAY_SIZE * TRAY_SIZE];
+    for py in 0..TRAY_SIZE {
+        for px in 0..TRAY_SIZE {
+            let mut inside = 0u32;
+            for sy in 0..TRAY_SUB {
+                for sx in 0..TRAY_SUB {
+                    let fx = px as f64 + (sx as f64 + 0.5) / TRAY_SUB as f64;
+                    let fy = py as f64 + (sy as f64 + 0.5) / TRAY_SUB as f64;
+                    inside += u32::from(pilita_contains((fx - ox) / s, (fy - oy) / s));
+                }
             }
+            alpha[py * TRAY_SIZE + px] = (inside * 255 / n) as u8;
         }
     }
-    Image::new_owned(rgba, TRAY_LADO as u32, TRAY_LADO as u32)
+    alpha
+}
+
+/// Icono de plantilla de la pilita: macOS usa solo el alfa, así que el color da igual.
+fn tray_icon() -> Image<'static> {
+    let rgba: Vec<u8> = tray_alpha().into_iter().flat_map(|a| [0, 0, 0, a]).collect();
+    Image::new_owned(rgba, TRAY_SIZE as u32, TRAY_SIZE as u32)
 }
 
 /// Icono de la barra de menú: abrir ajustes o salir.
@@ -404,17 +446,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn icono_de_bandeja_es_plantilla_36x36() {
-        let icono = tray_icon();
-        let alfa = |x: usize, y: usize| icono.rgba()[(y * TRAY_LADO + x) * 4 + 3];
-        assert_eq!(icono.rgba().len(), 36 * 36 * 4);
-        assert_eq!(icono.width(), 36);
-        assert_eq!(icono.height(), 36);
-        assert_eq!(alfa(0, 0), 0);
-        assert_eq!(alfa(35, 35), 0);
-        assert_eq!(alfa(2, 17), 255, "el marco debe ser opaco");
-        assert_eq!(alfa(17, 10), 255, "el marco superior debe ser opaco");
-        assert_eq!(alfa(32, 17), 255, "el borne debe ser opaco");
-        assert_eq!(alfa(5, 17), 0, "el interior sin carga debe ser transparente");
+    fn tray_icon_is_template_36x36() {
+        let icon = tray_icon();
+        let rgba = icon.rgba();
+        assert_eq!(rgba.len(), 36 * 36 * 4);
+        assert_eq!(icon.width(), 36);
+        assert_eq!(icon.height(), 36);
+        // Índice del píxel que contiene el punto (u, v) del viewBox de la mascota.
+        let pixel = |u: f64, v: f64| {
+            let (s, ox, oy) = tray_map();
+            let (px, py) = ((ox + u * s) as usize, (oy + v * s) as usize);
+            (py * TRAY_SIZE + px) * 4
+        };
+        assert_eq!(rgba[3], 0, "la esquina superior izquierda debe ser transparente");
+        assert_eq!(
+            rgba[rgba.len() - 1],
+            0,
+            "la esquina inferior derecha debe ser transparente"
+        );
+        assert_eq!(rgba[pixel(70.0, 120.0) + 3], 255, "el cuerpo debe ser opaco");
+        assert_eq!(rgba[pixel(70.0, 25.0) + 3], 255, "el remate debe ser opaco");
+        assert_eq!(rgba[pixel(52.0, 144.0) + 3], 255, "los pies deben ser opacos");
+        assert_eq!(rgba[pixel(52.0, 72.0) + 3], 0, "el ojo izquierdo debe ser un agujero");
+        assert_eq!(rgba[pixel(88.0, 72.0) + 3], 0, "el ojo derecho debe ser un agujero");
     }
 }
