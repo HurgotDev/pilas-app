@@ -1,5 +1,4 @@
 // Isla mínima funcional (M2/M3): píldora, lista de sesiones y tarjeta de permiso.
-// La tarjeta de AskUserQuestion completa es parte de M4 (docs/PLAN.md).
 import type { PilitaMascot, PilitaState } from "../mascot/pilita";
 import { play } from "../sound/sfx";
 import * as api from "./api";
@@ -24,6 +23,19 @@ const DEST: Record<string, string> = {
   userSettings: "usuario",
   session: "esta sesión",
 };
+
+interface Question {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: { label: string; description?: string }[];
+}
+
+// Preguntas de AskUserQuestion; vacío si el payload no trae ninguna.
+function questionsOf(p: api.PendingView): Question[] {
+  const list = p.tool_input?.questions;
+  return Array.isArray(list) ? (list as Question[]) : [];
+}
 
 // Una línea por regla o directorio que Claude Code guardaría con "Siempre".
 function describeSuggestions(list: unknown[]): string[] {
@@ -64,6 +76,8 @@ export function mountIsland(root: HTMLElement): void {
   // Estado de la tarjeta por request_id: deja de coincidir al llegar otro pendiente, así que no hace falta resetearlo.
   let confirmAlways: string | null = null; // paso de confirmación de "Siempre"
   let expanded: string | null = null; // detalle expandido ("ver más")
+  // Progreso de AskUserQuestion: paso actual y elecciones por pregunta; se reinicia si cambia la tarjeta.
+  let qCard: { id: string; step: number; picks: string[][] } | null = null;
 
   root.innerHTML = `
     <div class="pill">
@@ -123,15 +137,51 @@ export function mountIsland(root: HTMLElement): void {
     return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
   }
 
+  function qCardOf(p: api.PendingView): { step: number; picks: string[][] } {
+    if (qCard?.id !== p.request_id) qCard = { id: p.request_id, step: 0, picks: questionsOf(p).map(() => []) };
+    return qCard;
+  }
+
+  function renderQuestion(p: api.PendingView, index: number): string {
+    const counter = snap.pending.length > 1 ? ` · ${index + 1} de ${snap.pending.length}` : "";
+    const qs = questionsOf(p);
+    const terminal = `<button class="link" data-q-terminal="${p.request_id}">Responder en la terminal</button>`;
+    if (qs.length === 0) return `<div class="card-head">${esc(p.project)} tiene una pregunta${counter}</div>${terminal}`;
+    const card = qCardOf(p);
+    const q = qs[card.step];
+    const picks = card.picks[card.step];
+    const last = card.step === qs.length - 1;
+    const header = q.header ? ` · ${esc(q.header)}` : "";
+    const steps = qs.length > 1 ? ` · ${card.step + 1}/${qs.length}` : "";
+    const options = q.options
+      .map((o, j) => {
+        const on = picks.includes(o.label);
+        const role = q.multiSelect ? `role="checkbox" aria-checked="${on}"` : `aria-pressed="${on}"`;
+        const text = `<span class="q-label">${esc(o.label)}</span>${o.description ? `<span class="q-desc">${esc(o.description)}</span>` : ""}`;
+        return `<button class="q-opt${q.multiSelect ? " q-multi" : ""}${on ? " on" : ""}" ${role} data-q-opt="${j}">${
+          q.multiSelect ? `<span class="q-box"></span><span class="q-col">${text}</span>` : text
+        }</button>`;
+      })
+      .join("");
+    const answered = card.picks.every((l) => l.length > 0);
+    const actions = [
+      card.step > 0 ? `<button class="q-back" data-q-back>‹ Atrás</button>` : "",
+      q.multiSelect && !last ? `<button class="b-allow" data-q-next ${picks.length ? "" : "disabled"}>Siguiente</button>` : "",
+      last ? `<button class="b-allow" data-q-send ${answered ? "" : "disabled"}>Enviar</button>` : "",
+    ].join("");
+    return `<div class="card-head">${esc(p.project)}${header}${steps}${counter}</div>
+      <div class="q-text">${esc(q.question)}</div>
+      <div class="q-options">${options}</div>
+      ${actions ? `<div class="buttons">${actions}</div>` : ""}
+      ${terminal}`;
+  }
+
   function renderCard(p: api.PendingView, index: number): string {
     const detail = p.tool_input
       ? String((p.tool_input as Record<string, unknown>).command ?? (p.tool_input as Record<string, unknown>).file_path ?? JSON.stringify(p.tool_input, null, 2))
       : "";
     const counter = snap.pending.length > 1 ? ` · ${index + 1} de ${snap.pending.length}` : "";
-    if (p.kind === "question") {
-      return `<div class="card-head">${esc(p.project)} tiene una pregunta${counter}</div>
-        <button class="link" data-q-terminal="${p.request_id}">Responder en la terminal</button>`;
-    }
+    if (p.kind === "question") return renderQuestion(p, index);
     if (confirmAlways === p.request_id) {
       const lines = describeSuggestions(p.permission_suggestions ?? []);
       return `<div class="card-head">Claude Code guardará estas reglas${counter}</div>
@@ -170,6 +220,34 @@ export function mountIsland(root: HTMLElement): void {
     play(choice === "deny" ? "denegado" : "aprobado");
   }
 
+  // Marca una opción: única avanza sola (salvo en la última); múltiple alterna la casilla.
+  function pickQuestion(p: api.PendingView, j: number): void {
+    const card = qCardOf(p);
+    const qs = questionsOf(p);
+    const label = qs[card.step].options[j].label;
+    if (qs[card.step].multiSelect) {
+      const picks = card.picks[card.step];
+      if (picks.includes(label)) card.picks[card.step] = picks.filter((l) => l !== label);
+      else picks.push(label);
+    } else {
+      card.picks[card.step] = [label];
+      if (card.step < qs.length - 1) card.step++;
+    }
+  }
+
+  // Respuestas en orden de opciones, con la pregunta como clave, según el contrato de Claude Code.
+  async function sendQuestion(p: api.PendingView): Promise<void> {
+    const card = qCardOf(p);
+    const qs = questionsOf(p);
+    if (!card.picks.every((l) => l.length > 0)) return;
+    const answers: Record<string, string> = {};
+    qs.forEach((q, i) => {
+      answers[q.question] = q.options.map((o) => o.label).filter((l) => card.picks[i].includes(l)).join(", ");
+    });
+    await api.answerQuestion(p.request_id, answers);
+    play("aprobado");
+  }
+
   function render(): void {
     mascot.state = mascotState();
     badge.hidden = snap.pending.length === 0;
@@ -192,7 +270,7 @@ export function mountIsland(root: HTMLElement): void {
 
   panel.addEventListener("click", async (e) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>(
-      "[data-choice],[data-confirm],[data-back],[data-expand],[data-session],[data-q-terminal]",
+      "[data-choice],[data-confirm],[data-back],[data-expand],[data-session],[data-q-terminal],[data-q-opt],[data-q-next],[data-q-back],[data-q-send]",
     );
     const first = snap.pending[0];
     if (!el) return;
@@ -209,6 +287,17 @@ export function mountIsland(root: HTMLElement): void {
       await decide(first, el.dataset.choice as api.PermissionChoice);
     } else if (el.hasAttribute("data-confirm") && first) {
       await decide(first, "always");
+    } else if (el.hasAttribute("data-q-opt") && first) {
+      pickQuestion(first, Number(el.dataset.qOpt));
+      render();
+    } else if (el.hasAttribute("data-q-next") && first) {
+      qCardOf(first).step++;
+      render();
+    } else if (el.hasAttribute("data-q-back") && first) {
+      qCardOf(first).step--;
+      render();
+    } else if (el.hasAttribute("data-q-send") && first) {
+      await sendQuestion(first);
     } else if (el.dataset.qTerminal) {
       await api.answerQuestion(el.dataset.qTerminal, null);
     } else if (el.dataset.session) {

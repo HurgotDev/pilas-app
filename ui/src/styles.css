@@ -50,4 +50,21 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .buttons { display: flex; gap: 8px; }
 .buttons button { flex: 1; font: inherit; font-weight: 700; border: 0; border-radius: 10px; padding: 8px; cursor: pointer; color: #fff; }
 .b-allow { background: var(--allow); } .b-always { background: #2a2d3a; } .b-deny { background: var(--deny); }
+.buttons button:disabled { opacity: .4; cursor: default; }
+.q-text { font-weight: 700; line-height: 18px; }
+.q-options { display: flex; flex-direction: column; gap: 6px; }
+.q-opt { font: inherit; text-align: left; color: var(--ink); background: #2a2d3a; border: 0; border-radius: 10px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.q-opt.on { background: var(--accent); }
+.q-opt.q-multi { flex-direction: row; align-items: center; gap: 10px; }
+.q-col { display: flex; flex-direction: column; gap: 2px; }
+.q-box { flex: none; position: relative; width: 16px; height: 16px; box-sizing: border-box; border: 1.5px solid var(--muted); border-radius: 5px; transition: background 120ms, border-color 120ms; }
+.q-box::after { content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid var(--accent); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) scale(0); transition: transform 120ms; }
+.q-opt.on .q-box { background: #fff; border-color: #fff; }
+.q-opt.on .q-box::after { transform: rotate(45deg) scale(1); }
+@media (prefers-reduced-motion: reduce) { .q-box, .q-box::after { transition: none; } }
+.buttons .q-back { flex: 0 0 auto; padding: 8px 14px; background: none; border: 0; color: var(--muted); font-weight: 400; cursor: pointer; }
+.buttons .q-back:hover { color: var(--ink); }
+.q-label { font-weight: 700; }
+.q-desc { color: var(--muted); font-size: 11px; }
+.q-opt.on .q-desc { color: #e4ecff; }
 .link { background: none; border: 0; color: var(--muted); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; align-self: center; }

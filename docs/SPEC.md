@@ -112,7 +112,7 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
 - Tarjeta de permiso: proyecto + herramienta, detalle en monoespaciada (6 líneas y "ver más"), Permitir / Siempre /
   Denegar, enlace "Responder en la terminal". `Enter` permite, `Esc` cierra sin decidir.
 - Tarjeta de pregunta: `header` como etiqueta, pregunta y opciones con descripción; única marca y avanza, múltiple
-  con casillas y Enviar; varias preguntas en pasos "2/3".
+  con casillas y Enviar; varias preguntas en pasos "2/3" con "Atrás" que conserva lo elegido.
 - Pantallas: por defecto la principal. Con notch, la píldora se centra sobre él; sin notch, cuelga del centro del
   borde superior bajo la barra de menú. Ajuste: Principal / La del notch / Una concreta. Se recoloca sola.
 

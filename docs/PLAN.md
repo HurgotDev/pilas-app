@@ -32,9 +32,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] `Enter` permite y `Esc` cierra cuando la isla tiene foco.
 
 ## M4 · Preguntas (AskUserQuestion)
-- [ ] Tarjeta con 1 a 4 preguntas en pasos, selección única y múltiple, botón Enviar.
-- [ ] Respuestas por `updatedInput.answers` (texto de la pregunta → etiquetas separadas por coma).
-- [ ] Sin tarjetas duplicadas (el `PermissionRequest` de AskUserQuestion se ignora).
+- [x] Tarjeta con 1 a 4 preguntas en pasos, selección única y múltiple, botón Enviar.
+- [x] Respuestas por `updatedInput.answers` (texto de la pregunta → etiquetas separadas por coma).
+- [x] Sin tarjetas duplicadas (el `PermissionRequest` de AskUserQuestion se ignora).
 
 ## M5 · La pilita y los sonidos
 - [ ] Estados y reacciones integrados con la prioridad Alerta > Llena > Cargando > Dormida.
