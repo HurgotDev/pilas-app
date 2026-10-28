@@ -64,7 +64,10 @@ pub struct SessionStore {
 }
 
 fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn project_of(cwd: &str) -> String {
@@ -76,7 +79,15 @@ pub fn describe_tool(payload: &Value) -> Option<String> {
     let tool = protocol::tool_name(payload)?;
     let input = payload.get("tool_input");
     let field = |k: &str| input.and_then(|i| i.get(k)).and_then(Value::as_str);
-    let short = |p: &str| p.rsplit('/').take(2).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join("/");
+    let short = |p: &str| {
+        p.rsplit('/')
+            .take(2)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("/")
+    };
     Some(match tool {
         "Bash" => format!("Ejecutando {}", field("command").unwrap_or("un comando")),
         "Edit" | "MultiEdit" => format!("Editando {}", field("file_path").map(short).unwrap_or_default()),
@@ -101,7 +112,11 @@ impl SessionStore {
     /// Sesiones ordenadas: pendientes primero, luego por actividad reciente.
     pub fn list(&self) -> Vec<&Session> {
         let mut v: Vec<_> = self.sessions.values().collect();
-        v.sort_by(|a, b| (b.pending > 0).cmp(&(a.pending > 0)).then(b.updated_ms.cmp(&a.updated_ms)));
+        v.sort_by(|a, b| {
+            (b.pending > 0)
+                .cmp(&(a.pending > 0))
+                .then(b.updated_ms.cmp(&a.updated_ms))
+        });
         v
     }
 
@@ -140,7 +155,11 @@ impl SessionStore {
             return vec![];
         };
         if msg.event == "SessionEnd" {
-            return self.sessions.remove(&id).map(|_| vec![StoreEvent::Removed(id)]).unwrap_or_default();
+            return self
+                .sessions
+                .remove(&id)
+                .map(|_| vec![StoreEvent::Removed(id)])
+                .unwrap_or_default();
         }
 
         let cwd = msg.payload.get("cwd").and_then(Value::as_str).unwrap_or("").to_string();
@@ -199,8 +218,11 @@ impl SessionStore {
                 let was_working = s.state != SessionState::EnEspera;
                 s.state = SessionState::EnEspera;
                 s.pending = 0;
-                s.last_assistant_message =
-                    msg.payload.get("last_assistant_message").and_then(Value::as_str).map(str::to_string);
+                s.last_assistant_message = msg
+                    .payload
+                    .get("last_assistant_message")
+                    .and_then(Value::as_str)
+                    .map(str::to_string);
                 if was_working {
                     out.push(StoreEvent::Finished(id.clone()));
                 }
@@ -265,7 +287,10 @@ mod tests {
     #[test]
     fn pregunta_no_se_duplica() {
         let mut st = SessionStore::default();
-        st.apply(&msg("PreToolUse", json!({ "tool_name": "AskUserQuestion", "tool_input": {} })));
+        st.apply(&msg(
+            "PreToolUse",
+            json!({ "tool_name": "AskUserQuestion", "tool_input": {} }),
+        ));
         st.apply(&msg("PermissionRequest", json!({ "tool_name": "AskUserQuestion" })));
         assert_eq!(st.get("s1").unwrap().pending, 1);
     }

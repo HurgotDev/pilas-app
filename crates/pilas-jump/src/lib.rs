@@ -48,7 +48,9 @@ fn osascript(script: &str) -> Result<String, JumpError> {
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
     } else {
-        Err(JumpError::Script(String::from_utf8_lossy(&out.stderr).trim().to_string()))
+        Err(JumpError::Script(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
     }
 }
 
@@ -111,7 +113,9 @@ impl TerminalJumper for GhosttyJumper {
     fn jump(&self, target: &JumpTarget) -> Result<JumpOutcome, JumpError> {
         if let Some(id) = &target.cached_terminal_id {
             if Self::focus_by_id(id).unwrap_or(false) {
-                return Ok(JumpOutcome::Exact { terminal_id: Some(id.clone()) });
+                return Ok(JumpOutcome::Exact {
+                    terminal_id: Some(id.clone()),
+                });
             }
         }
         // TODO(M6): coincidencia por TTY. Pendiente verificar si el diccionario de Ghostty expone

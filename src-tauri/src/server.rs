@@ -43,7 +43,9 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
     if reader.read_line(&mut line).unwrap_or(0) == 0 {
         return;
     }
-    let Ok(msg) = serde_json::from_str::<HookMessage>(&line) else { return };
+    let Ok(msg) = serde_json::from_str::<HookMessage>(&line) else {
+        return;
+    };
     if msg.v > PROTOCOL_VERSION {
         return; // versión más nueva que la nuestra: el hook sale sin decisión
     }
@@ -59,10 +61,17 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
         }
         if msg.blocking {
             let (tx, rx) = mpsc::channel();
-            let session_id = pilas_core::protocol::session_id(&msg.payload).unwrap_or_default().to_string();
+            let session_id = pilas_core::protocol::session_id(&msg.payload)
+                .unwrap_or_default()
+                .to_string();
             inner.pending.insert(
                 msg.id.clone(),
-                PendingRequest { session_id, event: msg.event.clone(), payload: msg.payload.clone(), tx: tx.clone() },
+                PendingRequest {
+                    session_id,
+                    event: msg.event.clone(),
+                    payload: msg.payload.clone(),
+                    tx: tx.clone(),
+                },
             );
             inner.queue.push_back(msg.id.clone());
             // Vigila si el hook se va (el usuario respondió en la terminal o Claude Code canceló).

@@ -68,8 +68,16 @@ pub(crate) fn snapshot(inner: &Inner) -> Snapshot {
             Some(PendingView {
                 request_id: rid.clone(),
                 session_id: p.session_id.clone(),
-                project: inner.store.get(&p.session_id).map(|s| s.project.clone()).unwrap_or_default(),
-                kind: if p.event == "PreToolUse" { "question" } else { "permission" },
+                project: inner
+                    .store
+                    .get(&p.session_id)
+                    .map(|s| s.project.clone())
+                    .unwrap_or_default(),
+                kind: if p.event == "PreToolUse" {
+                    "question"
+                } else {
+                    "permission"
+                },
                 tool_name: p.payload.get("tool_name").and_then(Value::as_str).map(str::to_string),
                 tool_input: p.payload.get("tool_input").cloned(),
                 permission_suggestions: p.payload.get("permission_suggestions").cloned(),
@@ -90,8 +98,12 @@ pub(crate) fn emit_snapshot(app: &AppHandle) {
 }
 
 /// Saca una solicitud de la cola y le entrega la respuesta a su conexión.
-fn deliver(app: &AppHandle, state: &AppState, request_id: &str, build: impl FnOnce(&PendingRequest) -> Option<Value>)
-    -> Result<(), String> {
+fn deliver(
+    app: &AppHandle,
+    state: &AppState,
+    request_id: &str,
+    build: impl FnOnce(&PendingRequest) -> Option<Value>,
+) -> Result<(), String> {
     {
         let mut inner = state.0.lock().unwrap();
         let req = inner.pending.remove(request_id).ok_or("la solicitud ya no existe")?;
@@ -110,15 +122,25 @@ fn get_snapshot(state: State<'_, AppState>) -> Snapshot {
 }
 
 #[tauri::command]
-fn resolve_permission(app: AppHandle, state: State<'_, AppState>, request_id: String, choice: PermissionChoice)
-    -> Result<(), String> {
-    deliver(&app, &state, &request_id, |req| decision::permission_output(&choice, &req.payload))
+fn resolve_permission(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request_id: String,
+    choice: PermissionChoice,
+) -> Result<(), String> {
+    deliver(&app, &state, &request_id, |req| {
+        decision::permission_output(&choice, &req.payload)
+    })
 }
 
 /// `answers = None` → responder en la terminal.
 #[tauri::command]
-fn answer_question(app: AppHandle, state: State<'_, AppState>, request_id: String, answers: Option<Answers>)
-    -> Result<(), String> {
+fn answer_question(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    request_id: String,
+    answers: Option<Answers>,
+) -> Result<(), String> {
     deliver(&app, &state, &request_id, |req| match &answers {
         Some(a) => decision::question_output(&req.payload, a),
         None => Some(decision::question_to_terminal()),
@@ -157,7 +179,12 @@ pub fn run() {
             server::start(app.handle().clone())?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_snapshot, resolve_permission, answer_question, jump_to_session])
+        .invoke_handler(tauri::generate_handler![
+            get_snapshot,
+            resolve_permission,
+            answer_question,
+            jump_to_session
+        ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Pilas");
 }

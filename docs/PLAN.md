@@ -4,9 +4,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 (la ventana sobre el notch). Los criterios de aceptación finales están en `docs/SPEC.md`.
 
 ## M0 · Fundaciones
-- [ ] `cargo check --workspace` y `cargo clippy --workspace -- -D warnings` sin errores (el esqueleto no se compiló al generarse).
-- [ ] `cargo test -p pilas-core -p pilas-jump` en verde.
-- [ ] `npm run app` abre la ventana transparente sin ícono en el Dock.
+- [x] `cargo check --workspace` y `cargo clippy --workspace -- -D warnings` sin errores (el esqueleto no se compiló al generarse).
+- [x] `cargo test -p pilas-core -p pilas-jump` en verde.
+- [x] `npm run app` abre la ventana transparente sin ícono en el Dock.
 
 ## M1 · La isla en su sitio (riesgo alto: hacerlo primero)
 - [ ] Convertir la ventana en `NSPanel`: nivel por encima de la barra de menú, en todos los Spaces, sin robar foco.

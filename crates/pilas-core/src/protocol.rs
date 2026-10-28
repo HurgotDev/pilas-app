@@ -39,7 +39,11 @@ pub struct AppReply {
 
 impl AppReply {
     pub fn new(id: impl Into<String>, stdout: Option<Value>) -> Self {
-        Self { v: PROTOCOL_VERSION, id: id.into(), stdout }
+        Self {
+            v: PROTOCOL_VERSION,
+            id: id.into(),
+            stdout,
+        }
     }
 }
 
@@ -77,7 +81,10 @@ mod tests {
     #[test]
     fn bloqueantes() {
         assert!(is_blocking("PermissionRequest", &json!({"tool_name": "Bash"})));
-        assert!(!is_blocking("PermissionRequest", &json!({"tool_name": "AskUserQuestion"})));
+        assert!(!is_blocking(
+            "PermissionRequest",
+            &json!({"tool_name": "AskUserQuestion"})
+        ));
         assert!(is_blocking("PreToolUse", &json!({"tool_name": "AskUserQuestion"})));
         assert!(!is_blocking("PreToolUse", &json!({"tool_name": "Edit"})));
         assert!(!is_blocking("Stop", &json!({})));
@@ -85,7 +92,10 @@ mod tests {
 
     #[test]
     fn ignora_permission_request_de_preguntas() {
-        assert!(is_ignored("PermissionRequest", &json!({"tool_name": "AskUserQuestion"})));
+        assert!(is_ignored(
+            "PermissionRequest",
+            &json!({"tool_name": "AskUserQuestion"})
+        ));
         assert!(!is_ignored("PermissionRequest", &json!({"tool_name": "Bash"})));
     }
 

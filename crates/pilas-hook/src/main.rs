@@ -55,13 +55,21 @@ fn run() -> Option<()> {
 fn find_tty() -> (Option<u32>, Option<String>) {
     let mut pid = std::os::unix::process::parent_id();
     for _ in 0..12 {
-        let out = std::process::Command::new("ps").args(["-o", "ppid=,tty=", "-p", &pid.to_string()]).output();
+        let out = std::process::Command::new("ps")
+            .args(["-o", "ppid=,tty=", "-p", &pid.to_string()])
+            .output();
         let Ok(out) = out else { break };
         let text = String::from_utf8_lossy(&out.stdout);
         let mut parts = text.split_whitespace();
-        let (Some(ppid), Some(tty)) = (parts.next(), parts.next()) else { break };
+        let (Some(ppid), Some(tty)) = (parts.next(), parts.next()) else {
+            break;
+        };
         if tty != "??" && tty != "?" {
-            let tty = if tty.starts_with("/dev/") { tty.to_string() } else { format!("/dev/{tty}") };
+            let tty = if tty.starts_with("/dev/") {
+                tty.to_string()
+            } else {
+                format!("/dev/{tty}")
+            };
             return (Some(pid), Some(tty));
         }
         match ppid.parse::<u32>() {

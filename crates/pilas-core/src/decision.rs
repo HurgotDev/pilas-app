@@ -26,7 +26,10 @@ pub fn permission_output(choice: &PermissionChoice, payload: &Value) -> Option<V
         PermissionChoice::Deny => json!({ "behavior": "deny", "message": DENY_MESSAGE }),
         PermissionChoice::Always => {
             // Solo reenviamos lo que Claude Code sugirió: nunca inventamos reglas.
-            let suggestions = payload.get("permission_suggestions").cloned().unwrap_or_else(|| json!([]));
+            let suggestions = payload
+                .get("permission_suggestions")
+                .cloned()
+                .unwrap_or_else(|| json!([]));
             json!({ "behavior": "allow", "updatedPermissions": suggestions })
         }
         PermissionChoice::Terminal => return None,
