@@ -54,19 +54,16 @@ cargo test --workspace --exclude pilas
 
 Para probar los hooks sin afectar tus propias sesiones de Claude Code, sigue `docs/HOOKS-DEV.md`.
 
+## Contribuir
+
+Crea tu rama (`feat/<slug>` o `fix/<slug>`) desde `develop`, añade un
+fragmento en `.changes/` (ver `.changes/README.md`) y abre el PR a `develop`.
+
 ## Publicar una versión
 
-Para quien mantiene el proyecto:
-
-1. Sube `version` en `src-tauri/tauri.conf.json` y en `Cargo.toml` (sección
-   `[workspace.package]`). Deben coincidir con la etiqueta.
-2. Crea y sube la etiqueta: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. El workflow `.github/workflows/release.yml` compila el `.dmg` universal
-   (Apple Silicon e Intel) y crea un release **borrador** con el `.dmg`.
-4. Revisa las notas, y publica el release desde GitHub.
-
-Para probar el workflow sin crear una etiqueta, lánzalo a mano desde la
-pestaña Actions: en lugar de un release, deja el `.dmg` como artefacto.
+Cada PR fusionado en `main` publica una versión automáticamente. El proceso
+completo (ramas, changelog, releases y hotfixes) está en
+`docs/RELEASING.md`.
 
 ## Licencia
 
