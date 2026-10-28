@@ -9,6 +9,7 @@ type Size = "hidden" | "pill" | "open";
 const OPEN_MAX_H = 360; // tope de la tarjeta abierta (styles.css); igual que en Rust
 const HIDDEN_H = 6; // alturas de la ventana por modo (styles.css)
 const PILL_H = 32;
+const OPEN_W = 420; // ancho de la ventana abierta; igual que en Rust
 
 const STATE_LABEL: Record<api.SessionState, string> = {
   en_espera: "En espera",
@@ -32,34 +33,56 @@ export function mountIsland(root: HTMLElement): void {
   let fullUntil = 0; // la pilita se muestra "llena" ~4 s tras terminar una sesión
   let sent = { mode: "", h: 0 }; // último tamaño de ventana enviado al backend
   let shrinkTimer = 0;
+  let seq = 0; // invalida aplicaciones de tamaño pendientes
+  let pillW = window.innerWidth; // ancho de la píldora = ancho de la ventana fuera del modo abierto
 
   root.innerHTML = `
     <div class="pill">
       <pilas-mascot state="dormida"></pilas-mascot>
       <span class="badge" hidden></span>
     </div>
-    <div class="panel" hidden></div>`;
+    <div class="panel"></div>`;
   const mascot = root.querySelector("pilas-mascot") as PilitaMascot;
   const badge = root.querySelector(".badge") as HTMLElement;
   const panel = root.querySelector(".panel") as HTMLElement;
 
   const size = (): Size => (open ? "open" : snap.sessions.length === 0 && !peek ? "hidden" : "pill");
 
-  // La ventana toma el tamaño de la isla. Al crecer se avisa antes de pintar; al encoger,
-  // tras la transición CSS (~250 ms) para no recortar la isla.
+  // Tamaño de la isla en CSS (ancho y alto explícitos para que transicionen).
+  function applySize(mode: Size, h: number): void {
+    root.dataset.size = mode;
+    root.style.setProperty("--w", `${mode === "open" ? OPEN_W : pillW}px`);
+    root.style.setProperty("--h", `${h}px`);
+  }
+
+  // La ventana toma el tamaño de la isla. Al crecer, primero la ventana y en el siguiente frame el CSS
+  // (la isla anima dentro de la ventana ya grande); al encoger, el CSS ya y la ventana tras la transición (~300 ms).
   function syncWindow(): void {
     clearTimeout(shrinkTimer);
     const mode = size();
-    const h = mode === "open" ? Math.min(root.scrollHeight, OPEN_MAX_H) : mode === "pill" ? PILL_H : HIDDEN_H;
-    if (mode === sent.mode && h === sent.h) return;
+    // Se mide el contenido, no la isla (su alto ahora es fijo).
+    const content = (root.querySelector(".pill") as HTMLElement).offsetHeight + panel.offsetHeight;
+    const h = mode === "open" ? Math.min(content, OPEN_MAX_H) : mode === "pill" ? PILL_H : HIDDEN_H;
+    const mine = ++seq;
+    if (mode === sent.mode && h === sent.h) return applySize(mode, h);
     const send = () => {
       sent = { mode, h };
-      void api.setIslandMode(mode, mode === "open" ? h : undefined);
+      return api.setIslandMode(mode, mode === "open" ? h : undefined);
     };
     const grows = h > sent.h || (mode === "open" && sent.mode !== "open");
-    if (grows) send();
-    else shrinkTimer = window.setTimeout(send, 260);
+    if (grows) {
+      void send().finally(() => requestAnimationFrame(() => requestAnimationFrame(() => mine === seq && applySize(mode, h))));
+    } else {
+      applySize(mode, h);
+      shrinkTimer = window.setTimeout(() => void send(), 320);
+    }
   }
+  // Fuera del modo abierto la ventana mide exactamente lo que la píldora.
+  window.addEventListener("resize", () => {
+    if (sent.mode === "open") return;
+    pillW = window.innerWidth;
+    root.style.setProperty("--w", `${pillW}px`);
+  });
 
   function mascotState(): PilitaState {
     if (snap.mascot === "alerta") return "alerta";
@@ -91,11 +114,9 @@ export function mountIsland(root: HTMLElement): void {
   }
 
   function render(): void {
-    root.dataset.size = size();
     mascot.state = mascotState();
     badge.hidden = snap.pending.length === 0;
     badge.textContent = String(snap.pending.length);
-    panel.hidden = !open;
     if (open) {
       const first = snap.pending[0];
       panel.innerHTML = first

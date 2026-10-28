@@ -10,21 +10,27 @@
 }
 html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
 
-/* La isla es siempre negra para fundirse con el notch. El ancho lo marca la ventana (ver panel.rs). */
-.island { margin: 0 auto; width: 100%; background: #000; color: var(--ink); border-radius: 0 0 20px 20px;
-          transition: height .25s ease; overflow: hidden; }
+/* La isla es siempre negra para fundirse con el notch. Ancho y alto salen de island.ts (--w, --h) para poder
+   animarlos; la ventana nativa ya es igual o mayor (ver panel.rs). */
+.island { margin: 0 auto; width: var(--w, 100%); height: var(--h, 32px); background: #000; color: var(--ink);
+          border-radius: 0 0 20px 20px; overflow: hidden;
+          transition: width .3s cubic-bezier(.32,.72,0,1), height .3s cubic-bezier(.32,.72,0,1),
+                      border-radius .3s cubic-bezier(.32,.72,0,1); }
 /* Oculta: la caja de 6 px sigue recibiendo el cursor, pero no se pinta nada. */
-.island[data-size="hidden"] { height: 6px; background: transparent; }
+.island[data-size="hidden"] { background: transparent; }
 .island[data-size="hidden"] > * { visibility: hidden; }
-.island[data-size="pill"]   { height: 32px; }
-.island[data-size="open"]   { max-height: 360px; border-radius: 0 0 24px 24px; }
+.island[data-size="open"]   { border-radius: 0 0 24px 24px; }
 
 .pill { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 10px; }
 .pill pilas-mascot { height: 28px; }
 .badge { min-width: 20px; height: 20px; border-radius: 10px; background: var(--deny); font-size: 12px; font-weight: 700;
          display: grid; place-items: center; padding: 0 6px; }
 
-.panel { padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.panel { box-sizing: border-box; min-width: 420px; padding: 4px 16px 16px;
+         transition: opacity .15s ease, visibility 0s .3s; opacity: 0; visibility: hidden; }
+.island[data-size="open"] .panel { opacity: 1; visibility: visible; transition: opacity .2s ease .1s; }
+@media (prefers-reduced-motion: reduce) { .island, .panel { transition: none !important; } }
+.panel { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
 .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dot[data-s="trabajando"] { background: var(--accent); }

@@ -15,6 +15,8 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [ ] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
       Pendiente: probar con monitor externo y la recolocación; con notch ya funciona.
 - [x] Click-through fuera de la píldora y área de hover de 6 px cuando está oculta.
+- [x] Transición fluida de píldora a abierta y vuelta (ancho y alto animados
+      en CSS; la ventana nativa crece antes y encoge después).
 - Prueba: escribir en otra app mientras la isla cambia de tamaño; el foco nunca se pierde.
 
 ## M2 · Hook y sesiones de punta a punta
