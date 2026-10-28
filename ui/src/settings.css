@@ -79,3 +79,7 @@ button.link, .link { background: none; border: 0; padding: 0; color: var(--accen
 input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 input[type="range"] { accent-color: var(--accent); width: 160px; }
 select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+
+/* Notas de versión plegables (Ajustes → Actualizaciones). */
+details summary { cursor: pointer; color: var(--accent); margin-bottom: 6px; }
+.notes { white-space: pre-wrap; font-size: 12px; line-height: 1.4; color: var(--muted); margin: 0; }

@@ -61,3 +61,11 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 ## M8 · Publicación
 - [x] Workflow de release con `.dmg` universal en GitHub Actions.
 - [x] README con instrucciones para abrir una app sin notarizar.
+
+## M9 · Actualizaciones
+- [x] Refrescar el `pilas-hook` copiado al arrancar si difiere del de la app.
+- [x] `tauri-plugin-updater`: ajuste "Buscar actualizaciones" (sí por
+  defecto), búsqueda al arrancar y cada 24 h, aviso en el menú y en Ajustes,
+  instalar y reiniciar solo a petición.
+- [ ] Release: artefactos firmados del updater y `latest.json` en cada versión.
+- [ ] Cask en `HurgotDev/homebrew-tap` actualizado por el workflow de release.

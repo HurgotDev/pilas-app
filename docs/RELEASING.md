@@ -70,12 +70,47 @@ de la actual y del bump más alto entre los fragmentos (semver estricto: con
    un release normal.
 4. Haz el back-merge de `main` a `develop` con un PR.
 
+## Secretos y artefactos
+
+El release necesita estos secretos del repo (Settings → Secrets):
+
+- `TAURI_SIGNING_PRIVATE_KEY`: clave privada de minisign que firma el
+  tarball del updater. Sin ella el job falla con un mensaje claro.
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: contraseña de esa clave.
+- `HOMEBREW_TOKEN`: token con permiso de escritura en
+  `HurgotDev/homebrew-tap`. Si falta, el cask no se actualiza, pero el
+  release se publica igual (aparece un aviso).
+
+Cada release publica en GitHub:
+
+- `Pilas_<versión>_universal.dmg`: instalación manual y el cask.
+- `Pilas_universal.app.tar.gz`: el paquete que descarga el updater.
+- `latest.json`: versión, notas, fecha y firma. El endpoint de la app es
+  `.../releases/latest/download/latest.json`, así que cada release nuevo
+  reemplaza al anterior.
+
+En `workflow_dispatch` no se publica nada: solo quedan como artefactos el
+`.dmg` y el tarball.
+
+Después de publicar, el job `cask` renderiza `packaging/homebrew/pilas.rb.tmpl`
+con el sha256 del `.dmg` y lo sube a `Casks/pilas.rb` de
+`HurgotDev/homebrew-tap`.
+
+**Guarda la clave privada en un gestor de contraseñas.** Si la pierdes, las
+instalaciones existentes no podrán actualizarse automáticamente: el updater
+solo acepta paquetes firmados con la clave que llevan incrustada. Habría que
+publicar una app nueva a mano y que cada persona la reinstale. Para cambiar
+la clave hay que hacerlo con cuidado y en una versión de transición.
+
 ## Notas
 
 - Los PRs los abre una persona (desde GitHub o con `gh pr create`). Los PRs
   que abre un workflow con `GITHUB_TOKEN` no disparan CI, así que el check
   `policy` nunca correría y no se podrían fusionar.
 - Para probar la compilación sin publicar, lanza el workflow Release a mano
-  desde la pestaña Actions: deja el `.dmg` como artefacto.
+  desde la pestaña Actions: deja el `.dmg` y el tarball como artefactos.
+- Para generar la firma local (solo hace falta si cambias la clave):
+  `npx tauri signer generate -w ~/.tauri/pilas.key`. La clave pública va en
+  `plugins.updater.pubkey` de `src-tauri/tauri.conf.json`. No la subas al repo.
 - Publicar es definitivo; si algo sale mal, corrige con un hotfix en vez de
   reescribir la etiqueta.

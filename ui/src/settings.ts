@@ -3,6 +3,7 @@ import "./mascot/pilita";
 import * as api from "./island/api";
 import { configure, play } from "./sound/sfx";
 import { lang, setLang, t, type Key, type Lang } from "./i18n";
+import { getVersion } from "@tauri-apps/api/app";
 
 const STEPS = 4;
 const HOOK_LABEL: Record<api.HookStatus, Key> = {
@@ -11,7 +12,7 @@ const HOOK_LABEL: Record<api.HookStatus, Key> = {
   needs_repair: "hooks.needs_repair",
   invalid_json: "hooks.invalid_json",
 };
-type BoolKey = "sound_enabled" | "open_on_pending" | "launch_at_login";
+type BoolKey = "sound_enabled" | "open_on_pending" | "launch_at_login" | "check_updates";
 
 let settings: api.Settings;
 let hooks: api.HooksInfo = { status: "missing", settings_path: "" };
@@ -21,6 +22,12 @@ let diff: { action: api.HookAction; lines: api.DiffLine[] } | null = null; // se
 let backup: string | null = null; // copia de seguridad del último cambio
 let error = ""; // último error del instalador o de guardar
 let busy = false; // hay una llamada al instalador en curso
+let update: api.UpdateInfo | null = null; // versión nueva conocida, o null si está al día
+let version = ""; // versión instalada
+let checking = false; // búsqueda manual en curso
+let installing = false; // descarga e instalación en curso
+let confirmInstall = false; // pide confirmación antes de reiniciar
+let updateError = ""; // último error de actualizaciones
 
 const root = document.getElementById("app")!;
 
@@ -61,6 +68,35 @@ function errorLine(): string {
 
 function backupLine(): string {
   return backup ? `<p class="muted">${esc(t("hooks.backup", { path: backup }))}</p>` : "";
+}
+
+// Búsqueda manual: el error se muestra en la sección de actualizaciones.
+async function checkNow(): Promise<void> {
+  checking = true;
+  updateError = "";
+  render();
+  try {
+    update = await api.checkUpdatesNow();
+  } catch (e) {
+    updateError = String(e);
+  }
+  checking = false;
+  render();
+}
+
+// Solo tras confirmar. Si todo va bien Pilas se reinicia y esta vista desaparece.
+async function install(): Promise<void> {
+  installing = true;
+  updateError = "";
+  render();
+  try {
+    await api.installUpdate();
+  } catch (e) {
+    updateError = String(e);
+    installing = false;
+    confirmInstall = false;
+    render();
+  }
 }
 
 // Guarda al instante y aplica el sonido en esta ventana. Un fallo se muestra en la vista.
@@ -175,6 +211,22 @@ function settingsView(): string {
     ? `<div class="diff">${diffHtml(diff.lines)}</div>
        <div class="btns"><button class="primary" data-apply>${t("hooks.apply")}</button><button data-cancel>${t("btn.cancel")}</button></div>`
     : "";
+  const notes = update?.notes
+    ? `<details><summary>${t("upd.notes")}</summary><pre class="notes">${esc(update.notes)}</pre></details>`
+    : "";
+  const status = update
+    ? `<p class="status s-ok">${t("upd.available", { version: esc(update.version) })}</p>${notes}`
+    : `<p class="muted">${t("upd.uptodate")}</p>`;
+  const actions = installing
+    ? `<p class="muted">${t("upd.installing")}</p>`
+    : confirmInstall
+      ? `<p class="muted">${t("upd.confirm")}</p>
+         <div class="btns"><button class="primary" data-install-go>${t("upd.install")}</button><button data-install-cancel>${t("btn.cancel")}</button></div>`
+      : `<div class="btns">
+           <button data-check ${checking ? "disabled" : ""}>${t(checking ? "upd.checking" : "upd.check")}</button>
+           ${update ? `<button class="primary" data-install>${t("upd.install")}</button>` : ""}
+         </div>`;
+  const updatesError = updateError ? `<p class="error" role="alert">${esc(updateError)}</p>` : "";
   return `<main class="page">
     <h2>${t("set.hooks")}</h2>
     <section class="group">
@@ -206,6 +258,16 @@ function settingsView(): string {
         <select data-lang>${langOpts.map(([v, l]) => `<option value="${v}" ${v === langCurrent ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
       </label>
     </section>
+    <h2>${t("upd.title")}</h2>
+    <section class="group">
+      ${check("check_updates", "set.check_updates")}
+      <div class="row"><span>${t("upd.version")}</span><span>${esc(version)}</span></div>
+      <div class="row block">
+        ${status}
+        ${actions}
+        ${updatesError}
+      </div>
+    </section>
   </main>`;
 }
 
@@ -215,9 +277,13 @@ function render(): void {
 }
 
 root.addEventListener("click", (e) => {
-  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-show],[data-apply],[data-cancel],[data-next],[data-back],[data-done]");
+  const el = (e.target as HTMLElement).closest<HTMLElement>("[data-show],[data-apply],[data-cancel],[data-next],[data-back],[data-done],[data-check],[data-install],[data-install-go],[data-install-cancel]");
   if (!el) return;
   if (el.dataset.show) void showDiff(el.dataset.show as api.HookAction);
+  else if (el.hasAttribute("data-check")) void checkNow();
+  else if (el.hasAttribute("data-install")) { confirmInstall = true; render(); }
+  else if (el.hasAttribute("data-install-cancel")) { confirmInstall = false; render(); }
+  else if (el.hasAttribute("data-install-go")) void install();
   else if (el.hasAttribute("data-apply")) void apply();
   else if (el.hasAttribute("data-cancel")) { diff = null; render(); }
   else if (el.hasAttribute("data-next")) go(step + 1);
@@ -257,8 +323,14 @@ async function init(): Promise<void> {
     api.hooksStatus(),
     api.listScreens().catch(() => [] as string[]),
   ]);
+  update = await api.getUpdateStatus();
+  version = await getVersion().catch(() => "");
   setLang(settings.lang);
   configure({ enabled: settings.sound_enabled, volume: settings.volume });
+  void api.onUpdate((u) => {
+    update = u;
+    render();
+  });
   // Re-pinta solo si cambian el idioma o el paso de onboarding; el resto ya está en pantalla.
   api.onSettings((s) => {
     const prev = settings;

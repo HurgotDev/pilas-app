@@ -65,6 +65,7 @@ export interface Settings {
   launch_at_login: boolean;
   lang: "en" | "es" | null; // null = idioma del sistema
   onboarded: boolean;
+  check_updates: boolean;
 }
 
 export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";
@@ -87,3 +88,16 @@ export const previewHooks = (action: HookAction) => invoke<DiffLine[]>("preview_
 /** Devuelve la ruta del backup, o `null` si no había nada que respaldar. */
 export const applyHooks = (action: HookAction) => invoke<string | null>("apply_hooks", { action });
 export const onSettings = (cb: (s: Settings) => void) => listen<Settings>("pilas://settings", (e) => cb(e.payload));
+
+// Actualizaciones (src-tauri/src/updates.rs). `null` = al día.
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+}
+export const getUpdateStatus = () => invoke<UpdateInfo | null>("update_status");
+/** Rechaza con un texto de error (p. ej. sin red). */
+export const checkUpdatesNow = () => invoke<UpdateInfo | null>("check_updates_now");
+/** Descarga, instala y reinicia Pilas. Solo al pulsar el botón. */
+export const installUpdate = () => invoke<void>("install_update");
+export const onUpdate = (cb: (u: UpdateInfo | null) => void) =>
+  listen<UpdateInfo | null>("pilas://update", (e) => cb(e.payload));

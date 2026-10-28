@@ -1,6 +1,6 @@
 name: Release
 
-# Cada push a main es un release; workflow_dispatch solo deja el .dmg como artefacto.
+# Cada push a main es un release; workflow_dispatch solo deja los artefactos para probar.
 on:
   push:
     branches: [main]
@@ -35,6 +35,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Comprueba la clave de firma del updater
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "::error::Falta el secreto TAURI_SIGNING_PRIVATE_KEY: sin él no se firman las actualizaciones. Ver docs/RELEASING.md."
+            exit 1
+          fi
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -57,9 +66,12 @@ jobs:
           codesign --force --sign - target/universal-apple-darwin/release/pilas-hook
 
       - name: Build universal app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           npx tauri build --target universal-apple-darwin --bundles app,dmg \
-            --config '{"bundle":{"macOS":{"signingIdentity":"-","files":{"MacOS/pilas-hook":"../target/universal-apple-darwin/release/pilas-hook"}}}}'
+            --config '{"bundle":{"createUpdaterArtifacts":true,"macOS":{"signingIdentity":"-","files":{"MacOS/pilas-hook":"../target/universal-apple-darwin/release/pilas-hook"}}}}'
 
       - name: Verify architectures and signature
         run: |
@@ -73,12 +85,29 @@ jobs:
           done
           codesign --verify --deep --strict --verbose=2 "$app"
 
-      - name: Upload dmg artifact
+      # Nombre estable: el endpoint de latest.json apunta a Pilas_universal.app.tar.gz.
+      - name: Rename updater artifacts
+        run: |
+          macos=target/universal-apple-darwin/release/bundle/macos
+          mv "$macos/Pilas.app.tar.gz" "$macos/Pilas_universal.app.tar.gz"
+          mv "$macos/Pilas.app.tar.gz.sig" "$macos/Pilas_universal.app.tar.gz.sig"
+
+      - name: Upload artifacts
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: pilas-dmg
-          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          name: pilas-release
+          path: |
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            target/universal-apple-darwin/release/bundle/macos/Pilas_universal.app.tar.gz
+
+      - name: Generate latest.json
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          node scripts/release.mjs latest "$VERSION" \
+            target/universal-apple-darwin/release/bundle/macos/Pilas_universal.app.tar.gz.sig > latest.json
 
       - name: Publish release
         if: github.event_name == 'push'
@@ -88,4 +117,45 @@ jobs:
         run: |
           node scripts/release.mjs notes "$VERSION" > notes.md
           gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Pilas $VERSION" \
-            --notes-file notes.md target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            --notes-file notes.md \
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg \
+            target/universal-apple-darwin/release/bundle/macos/Pilas_universal.app.tar.gz \
+            latest.json
+
+  cask:
+    needs: [check, release]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Renderiza el cask con el dmg publicado
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          curl -fsSL -o Pilas.dmg \
+            "https://github.com/HurgotDev/pilas-app/releases/download/v${VERSION}/Pilas_${VERSION}_universal.dmg"
+          node scripts/release.mjs cask "$VERSION" Pilas.dmg > pilas.rb
+          ruby -c pilas.rb
+
+      - name: Publica el cask en homebrew-tap
+        env:
+          HOMEBREW_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          if [ -z "$HOMEBREW_TOKEN" ]; then
+            echo "::warning::Falta el secreto HOMEBREW_TOKEN: el cask no se actualiza en homebrew-tap."
+            exit 0
+          fi
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TOKEN}@github.com/HurgotDev/homebrew-tap.git" tap
+          mkdir -p tap/Casks
+          cp pilas.rb tap/Casks/pilas.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/pilas.rb
+          if git diff --cached --quiet; then
+            echo "Cask already at $VERSION."
+            exit 0
+          fi
+          git commit -m "Update pilas cask to $VERSION"
+          git push origin HEAD:main

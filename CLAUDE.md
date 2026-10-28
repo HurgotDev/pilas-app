@@ -33,7 +33,8 @@ npm run dev                                  # solo la UI; playground de la pili
 2. **Nada se aprueba solo.** No hay timeouts ni modos que aprueben. "Siempre" solo reenvía las
    `permission_suggestions` de Claude Code, nunca reglas inventadas.
 3. **Una decisión solo va a su solicitud.** Se entrega por `request_id` exacto; si el hook se fue, se descarta.
-4. **Sin red.** La app no abre puertos TCP ni hace peticiones externas. Socket Unix con permisos 0600.
+4. **Sin red.** La app no abre puertos TCP ni hace peticiones externas, salvo la búsqueda de
+   actualizaciones (`latest.json` de GitHub Releases, desactivable en Ajustes). Socket Unix con permisos 0600.
 5. **El hook es tonto.** Reenvía el payload íntegro; toda interpretación vive en `pilas-core`, con tests.
 6. **Minimalismo.** Si algo no está en `docs/SPEC.md` → "Alcance v1", no se agrega sin preguntar.
 

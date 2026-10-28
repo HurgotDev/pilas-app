@@ -8,7 +8,7 @@ Pilas es una isla minimalista en el notch (o en el borde superior de la pantalla
 que te avisa cuando Claude Code te necesita y te deja responder sin cambiar de ventana. El nombre juega con
 "¡pilas!" (¡atento!) y con la mascota: una pilita cuya carga cuenta el estado.
 
-Principios: nunca bloquear Claude Code · minimalista · local y privado (sin red, sin cuentas, sin telemetría) ·
+Principios: nunca bloquear Claude Code · minimalista · local y privado (sin red salvo buscar actualizaciones, sin cuentas, sin telemetría) ·
 multiplataforma por diseño, macOS primero · extensible a otros agentes aunque la v1 solo soporte Claude Code.
 
 ## Alcance v1
@@ -170,10 +170,22 @@ ofrece reparar al iniciar, desinstala solo lo suyo.
 | Sonidos | Activado + volumen | Activado, 50 % |
 | Abrir isla al llegar un pendiente | Sí / No | Sí |
 | Iniciar con el sistema | Sí / No | Sí |
+| Buscar actualizaciones | Sí / No | Sí |
+
+Actualizaciones: con el ajuste activado, la app consulta
+`https://github.com/HurgotDev/pilas-app/releases/latest/download/latest.json`
+al arrancar y cada 24 h (`tauri-plugin-updater`, firmado con clave propia de
+Tauri). Si hay versión nueva lo indica en el menú de la pilita y en Ajustes;
+solo instala y reinicia cuando el usuario lo pide. Es la única petición de red
+de la app y no envía datos del usuario. Al arrancar, si los hooks están
+instalados y el `pilas-hook` copiado difiere del que trae la app, se vuelve a
+copiar (sin tocar `settings.json`). También se distribuye como cask en el tap
+`HurgotDev/homebrew-tap` (`auto_updates true`), que el workflow de release
+actualiza en cada versión.
 
 ## Seguridad y privacidad
 
-Sin red ni puertos TCP · sin telemetría · socket 0600 · decisiones atadas al `id` exacto · nada se aprueba solo ·
+Sin puertos TCP y sin red salvo la búsqueda de actualizaciones (desactivable) · sin telemetría · socket 0600 · decisiones atadas al `id` exacto · nada se aprueba solo ·
 "Siempre" solo con reglas sugeridas por Claude Code y mostradas antes · las reglas `deny`/`ask` de Claude Code
 siguen mandando · sin privilegios · el instalador siempre muestra diff y hace backup · logs mínimos sin prompts.
 

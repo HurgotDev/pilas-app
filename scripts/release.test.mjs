@@ -7,6 +7,8 @@ import {
   prependSection,
   renderSection,
   setCargoVersion,
+  buildLatest,
+  renderCask,
   setJsonVersion,
 } from "./release.mjs";
 
@@ -59,4 +61,27 @@ test("setJsonVersion y setCargoVersion solo tocan la versión del paquete", () =
   const cargo = '[workspace]\nmembers = []\n\n[workspace.package]\nversion = "0.1.0"\n\n[workspace.dependencies]\nserde = { version = "1" }\n';
   assert.equal(setCargoVersion(cargo, "0.2.0"), cargo.replace('"0.1.0"', '"0.2.0"'));
   assert.throws(() => setCargoVersion("[package]\nversion = \"1\"\n", "2.0.0"), /workspace\.package/);
+});
+
+test("buildLatest apunta ambas plataformas al mismo tarball", () => {
+  const latest = buildLatest({
+    version: "1.2.3",
+    notes: "- Cambio.",
+    pubDate: "2026-10-28T10:00:00.000Z",
+    signature: "c2ln",
+    url: "https://example.com/Pilas_universal.app.tar.gz",
+  });
+  assert.equal(latest.version, "1.2.3");
+  assert.equal(latest.pub_date, "2026-10-28T10:00:00.000Z");
+  assert.deepEqual(Object.keys(latest.platforms).sort(), ["darwin-aarch64", "darwin-x86_64"]);
+  assert.deepEqual(latest.platforms["darwin-aarch64"], latest.platforms["darwin-x86_64"]);
+  assert.equal(latest.platforms["darwin-x86_64"].signature, "c2ln");
+});
+
+test("renderCask rellena versión y sha256 y valida ambos", () => {
+  const sha = "a".repeat(64);
+  const out = renderCask('version "@VERSION@"\nsha256 "@SHA256@"', { version: "1.2.3", sha256: sha });
+  assert.equal(out, `version "1.2.3"\nsha256 "${sha}"`);
+  assert.throws(() => renderCask("@VERSION@", { version: "1.2", sha256: sha }), /versión/);
+  assert.throws(() => renderCask("@SHA256@", { version: "1.2.3", sha256: "xyz" }), /sha256/);
 });
