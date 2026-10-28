@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Herramienta de releases: fragmentos de changelog en .changes/, versión y notas.
-// Uso: node scripts/release.mjs <prepare|check|notes <version>|version>
+// Uso: node scripts/release.mjs <prepare|check|notes <version>|version|
+//   latest <version> <firma.sig>|cask <version> <dmg>>
 import { execFileSync, spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +75,25 @@ export function setCargoVersion(text, version) {
   return text.replace(re, `$1${version}"`);
 }
 
+// latest.json del updater (formato estático de Tauri). Ambas plataformas
+// apuntan al mismo tarball universal; la firma es el contenido del .sig.
+export function buildLatest({ version, notes, pubDate, signature, url }) {
+  const platform = { signature, url };
+  return {
+    version,
+    notes,
+    pub_date: pubDate,
+    platforms: { "darwin-aarch64": platform, "darwin-x86_64": platform },
+  };
+}
+
+// Rellena la plantilla del cask. La versión entra en Ruby: se valida antes.
+export function renderCask(template, { version, sha256 }) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`versión inválida: ${version}`);
+  if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("sha256 inválido");
+  return template.replaceAll("@VERSION@", version).replaceAll("@SHA256@", sha256);
+}
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CHANGES = path.join(ROOT, ".changes");
 const file = (p) => path.join(ROOT, p);
@@ -130,7 +151,14 @@ function prepare() {
   console.log(version);
 }
 
-function main([cmd, arg]) {
+function changelogSection(version) {
+  const changelog = fs.existsSync(file("CHANGELOG.md")) ? read("CHANGELOG.md") : "";
+  const body = extractSection(changelog, version);
+  if (body === null) throw new Error(`CHANGELOG.md no tiene una sección para ${version}`);
+  return body;
+}
+
+function main([cmd, ...args]) {
   if (cmd === "prepare") return prepare();
   if (cmd === "version") return console.log(currentVersion());
   if (cmd === "check") {
@@ -139,12 +167,27 @@ function main([cmd, arg]) {
     return console.log(`${fragments.length} fragmento(s) válido(s)`);
   }
   if (cmd === "notes") {
-    if (!arg) throw new Error("uso: release.mjs notes <version>");
-    const body = extractSection(fs.existsSync(file("CHANGELOG.md")) ? read("CHANGELOG.md") : "", arg);
-    if (body === null) throw new Error(`CHANGELOG.md no tiene una sección para ${arg}`);
-    return console.log(body);
+    if (!args[0]) throw new Error("uso: release.mjs notes <version>");
+    return console.log(changelogSection(args[0]));
   }
-  throw new Error("uso: release.mjs <prepare|check|notes <version>|version>");
+  if (cmd === "latest") {
+    const [version, sigPath] = args;
+    if (!version || !sigPath) throw new Error("uso: release.mjs latest <version> <firma.sig>");
+    const signature = fs.readFileSync(sigPath, "utf8").trim();
+    if (!signature) throw new Error(`firma vacía: ${sigPath}`);
+    const url = `https://github.com/HurgotDev/pilas-app/releases/download/v${version}/Pilas_universal.app.tar.gz`;
+    const pubDate = new Date().toISOString();
+    const notes = changelogSection(version);
+    return console.log(JSON.stringify(buildLatest({ version, notes, pubDate, signature, url }), null, 2));
+  }
+  if (cmd === "cask") {
+    const [version, dmg] = args;
+    if (!version || !dmg) throw new Error("uso: release.mjs cask <version> <dmg>");
+    const sha256 = crypto.createHash("sha256").update(fs.readFileSync(dmg)).digest("hex");
+    const template = read("packaging/homebrew/pilas.rb.tmpl");
+    return console.log(renderCask(template, { version, sha256 }));
+  }
+  throw new Error("uso: release.mjs <prepare|check|notes <version>|version|latest <version> <firma.sig>|cask <version> <dmg>>");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

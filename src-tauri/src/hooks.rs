@@ -130,12 +130,39 @@ pub fn apply(action: Action) -> Result<Option<PathBuf>, String> {
     Ok(backup)
 }
 
+/// `pilas-hook` empaquetado junto al ejecutable de la app (puede no existir).
+fn bundled_hook() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    Ok(exe.parent().ok_or("el ejecutable no tiene carpeta")?.join(HOOK_NAME))
+}
+
+/// Decisión pura: re-copiar si Pilas ya está conectada, hay un hook empaquetado
+/// y difiere de la copia (o la copia falta).
+pub fn needs_refresh(connected: bool, bundled: Option<&[u8]>, installed: Option<&[u8]>) -> bool {
+    connected && bundled.is_some() && bundled != installed
+}
+
+/// Al arrancar: si la app trae un hook distinto del copiado, lo recopia.
+/// Nunca toca settings.json y no informa de errores.
+pub fn refresh_hook() {
+    let Ok(p) = paths() else { return };
+    let Ok(current) = read_claude_settings(&p.claude_settings) else {
+        return;
+    };
+    let dest = p.hook_dest.to_str().unwrap_or_default();
+    let connected = !matches!(installer::status(&current, dest), HookStatus::Missing);
+    let bundled = bundled_hook().ok().and_then(|src| fs::read(src).ok());
+    let installed = fs::read(&p.hook_dest).ok();
+    if needs_refresh(connected, bundled.as_deref(), installed.as_deref()) {
+        let _ = copy_hook(&p.hook_dest);
+    }
+}
+
 /// Copia el binario del hook junto a la app a la carpeta de datos (escritura temporal + rename).
 fn copy_hook(dest: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
     // shortcut: en desarrollo copia target/debug/pilas-hook; en release lo empaqueta el workflow de publicación (bundle.macOS.files → MacOS/pilas-hook, universal y firmado ad-hoc)
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let src = exe.parent().ok_or("el ejecutable no tiene carpeta")?.join(HOOK_NAME);
+    let src = bundled_hook()?;
     if !src.exists() {
         return Err(format!(
             "no se encuentra {} junto a la app; compila con `cargo build -p pilas-hook`",
@@ -206,6 +233,23 @@ mod tests {
         assert_eq!(Action::parse("install"), Ok(Action::Install));
         assert_eq!(Action::parse("uninstall"), Ok(Action::Uninstall));
         assert!(Action::parse("borrar").is_err());
+    }
+
+    #[test]
+    fn refresco_solo_si_conectada_y_distinto() {
+        let nuevo: &[u8] = b"v2";
+        let viejo: &[u8] = b"v1";
+        assert!(
+            !needs_refresh(false, Some(nuevo), Some(viejo)),
+            "sin conectar no se toca"
+        );
+        assert!(
+            !needs_refresh(true, None, Some(viejo)),
+            "sin binario empaquetado no hay nada que copiar"
+        );
+        assert!(!needs_refresh(true, Some(nuevo), Some(nuevo)), "ya está al día");
+        assert!(needs_refresh(true, Some(nuevo), Some(viejo)), "binario distinto");
+        assert!(needs_refresh(true, Some(nuevo), None), "falta la copia");
     }
 
     #[test]

@@ -11,6 +11,15 @@ la terminal correcta sin cambiar de ventana.
 
 Pilas es para macOS 13 o superior.
 
+Con Homebrew (recomendado). El cask quita la marca de cuarentena por ti, así
+que no hace falta `xattr`:
+
+```bash
+brew install --cask hurgotdev/tap/pilas
+```
+
+O descarga el `.dmg`:
+
 1. Descarga el `.dmg` de la última versión en
    [GitHub Releases](https://github.com/HurgotDev/pilas-app/releases).
 2. Abre el `.dmg` y arrastra **Pilas** a **Applications**.
@@ -34,6 +43,11 @@ vez. Hay dos formas de permitirla:
 En el primer arranque se abre el onboarding, que instala los hooks en Claude
 Code. Después, el icono de la pilita en la barra de menú da acceso a
 **Settings…** (Ajustes).
+
+Pilas busca actualizaciones al arrancar y cada 24 horas, y avisa en el
+menú de la barra y en Ajustes. No instala nada sin que lo pidas. Para
+desactivar la búsqueda, quita la casilla **Buscar actualizaciones
+automáticamente** en **Settings…**.
 
 Para desinstalar, abre **Settings…** y pulsa **Disconnect** (Desconectar) para
 quitar los hooks de `~/.claude/settings.json`. Luego borra `Pilas.app` y la
