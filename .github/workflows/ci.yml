@@ -14,9 +14,16 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # tauri::generate_context! necesita dist/ en tiempo de compilación.
+      - run: npm ci
+      - run: npm run build
       - run: cargo fmt --all -- --check
-      - run: cargo clippy -p pilas-core -p pilas-hook -p pilas-jump -- -D warnings
-      - run: cargo test -p pilas-core -p pilas-hook -p pilas-jump
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo test -p pilas-core -p pilas-hook -p pilas-jump -p pilas
 
   ui:
     runs-on: ubuntu-latest
