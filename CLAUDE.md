@@ -53,8 +53,3 @@ npm run dev                                  # solo la UI; playground de la pili
   (funciones, ajustes, textos de la interfaz que cita el README, requisitos, privacidad) o los comandos
   de desarrollo, actualiza el README en el mismo PR. Antes de abrir un PR, relee el README y confirma
   que nada quedó desfasado; si no aplica, dilo en la casilla de la plantilla del PR.
-
-## Estado inicial (importante)
-
-El esqueleto se generó sin compilar Rust (no había toolchain). Lo primero es la tarea M0 de `docs/PLAN.md`:
-`cargo check --workspace`, corregir lo que falle y dejar los tests en verde. El frontend sí compila.
