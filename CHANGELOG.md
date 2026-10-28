@@ -7,6 +7,18 @@ proyecto sigue [Versionado Semántico](https://semver.org/lang/es/).
 Las secciones se generan con `npm run release:prepare` a partir de los
 fragmentos de `.changes/` (ver `docs/RELEASING.md`).
 
+## [0.2.0] - 2026-10-28
+
+### Novedades
+
+- Añade actualizaciones automáticas firmadas, instalación con Homebrew y el refresco del hook al arrancar.
+
+### Correcciones
+
+- El CI también compila, revisa y prueba la app (src-tauri).
+- Actualiza el README (qué hace, privacidad y comandos) y añade la regla de mantenerlo al día.
+- Añade el flujo de ramas y releases con changelog por cambio.
+
 ## [0.1.0] - 2026-10-28
 
 ### Novedades
