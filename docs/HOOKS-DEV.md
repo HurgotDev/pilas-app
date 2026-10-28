@@ -1,0 +1,48 @@
+# Probar hooks sin romper tu sesión de Claude Code
+
+Vas a desarrollar Pilas **con** Claude Code, así que no instales los hooks de desarrollo en
+`~/.claude/settings.json`: tu propia sesión de trabajo empezaría a pasar por la app a medio construir.
+
+## Opción 1: carpeta de pruebas con hooks locales
+
+```bash
+mkdir -p ~/pilas-sandbox/.claude && cd ~/pilas-sandbox
+cargo build -p pilas-hook --manifest-path ~/dev/pilas-app/Cargo.toml   # ajusta la ruta
+```
+
+Crea `~/pilas-sandbox/.claude/settings.local.json` (la ruta del binario debe ser absoluta):
+
+```json
+{
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "PreToolUse":       [{ "matcher": "*", "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [], "timeout": 3600 }] }],
+    "PermissionRequest":[{ "matcher": "*", "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [], "timeout": 3600 }] }],
+    "PostToolUse":      [{ "matcher": "*", "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "Notification":     [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "StopFailure":      [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }]
+  }
+}
+```
+
+Con `npm run app` corriendo, abre Claude Code en `~/pilas-sandbox` desde Ghostty y pídele algo que
+necesite permiso (por ejemplo, "crea un archivo hola.txt").
+
+## Opción 2: simular eventos sin Claude Code
+
+```bash
+echo '{"session_id":"s1","cwd":"/tmp/demo","hook_event_name":"SessionStart"}' | target/debug/pilas-hook
+echo '{"session_id":"s1","cwd":"/tmp/demo","hook_event_name":"UserPromptSubmit"}' | target/debug/pilas-hook
+echo '{"session_id":"s1","cwd":"/tmp/demo","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -rf build"}}' \
+  | target/debug/pilas-hook     # queda esperando: responde desde la isla y verás el JSON en stdout
+```
+
+`PILAS_SOCKET=/tmp/pilas-dev.sock` cambia la ruta del socket en la app y en el hook (útil para tests).
+
+## Comprobaciones de seguridad
+
+- Con la app cerrada, el hook debe terminar al instante y sin salida: `echo '{}' | pilas-hook; echo $?` → `0`.
+- Si un hook "no hace nada", ejecuta Claude Code con `claude --debug` y revisa el log de hooks.

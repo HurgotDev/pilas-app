@@ -1,0 +1,20 @@
+[package]
+name = "pilas"
+description = "Pilas: la pilita del notch que te avisa cuando Claude Code te necesita"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "pilas_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-private-api"] }
+serde.workspace = true
+serde_json.workspace = true
+pilas-core = { path = "../crates/pilas-core" }
+pilas-jump = { path = "../crates/pilas-jump" }

@@ -1,0 +1,11 @@
+[package]
+name = "pilas-hook"
+description = "Hook de Claude Code para Pilas: stdin → socket → stdout. Nunca bloquea a Claude Code."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pilas-core = { path = "../pilas-core" }
+serde_json.workspace = true
+uuid.workspace = true

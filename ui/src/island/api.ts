@@ -1,0 +1,45 @@
+// Puente con el backend de Tauri. Los tipos reflejan `Snapshot` en src-tauri/src/lib.rs.
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
+export type SessionState = "en_espera" | "trabajando" | "pendiente" | "error";
+export type MascotState = "dormida" | "cargando" | "alerta";
+export type PermissionChoice = "allow" | "deny" | "always" | "terminal";
+
+export interface Session {
+  session_id: string;
+  project: string;
+  cwd: string;
+  state: SessionState;
+  last_action: string | null;
+  pending: number;
+  updated_ms: number;
+}
+
+export interface PendingView {
+  request_id: string;
+  session_id: string;
+  project: string;
+  kind: "permission" | "question";
+  tool_name: string | null;
+  tool_input: Record<string, unknown> | null;
+  permission_suggestions: unknown[] | null;
+}
+
+export interface Snapshot {
+  sessions: Session[];
+  mascot: MascotState;
+  pending: PendingView[];
+}
+
+export const getSnapshot = () => invoke<Snapshot>("get_snapshot");
+export const resolvePermission = (requestId: string, choice: PermissionChoice) =>
+  invoke<void>("resolve_permission", { requestId, choice });
+/** `answers = null` → responder en la terminal. */
+export const answerQuestion = (requestId: string, answers: Record<string, string> | null) =>
+  invoke<void>("answer_question", { requestId, answers });
+export const jumpToSession = (sessionId: string) => invoke<void>("jump_to_session", { sessionId });
+
+export const onSnapshot = (cb: (s: Snapshot) => void) => listen<Snapshot>("pilas://snapshot", (e) => cb(e.payload));
+export const onPending = (cb: (requestId: string) => void) => listen<string>("pilas://pending", (e) => cb(e.payload));
+export const onFinished = (cb: (sessionId: string) => void) => listen<string>("pilas://finished", (e) => cb(e.payload));

@@ -1,0 +1,7 @@
+/target
+/dist
+node_modules/
+src-tauri/gen/
+.DS_Store
+*.log
+.claude/settings.local.json

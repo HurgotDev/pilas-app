@@ -1,0 +1,10 @@
+[package]
+name = "pilas-core"
+description = "Modelo de sesiones, máquina de estados y protocolo IPC de Pilas (sin Tauri)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/pilas-core", "crates/pilas-hook", "crates/pilas-jump", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Hugo Gutierrez"]
+repository = "https://github.com/HurgotDev/pilas-app"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+# El hook se ejecuta en cada evento de Claude Code: binario pequeño y arranque rápido.
+[profile.release.package.pilas-hook]
+opt-level = "z"

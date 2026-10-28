@@ -1,0 +1,9 @@
+[package]
+name = "pilas-jump"
+description = "Saltar a la terminal de una sesión (Ghostty exacto, el resto: traer la app al frente)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true

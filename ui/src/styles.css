@@ -1,0 +1,41 @@
+:root {
+  --ink: #ffffff;
+  --muted: #a3a8bd;
+  --line: #24262f;
+  --allow: #34c46a;
+  --deny: #ef4b5f;
+  --accent: #4f7df3;
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+  color-scheme: dark;
+}
+html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
+
+/* La isla es siempre negra para fundirse con el notch. */
+.island { margin: 0 auto; background: #000; color: var(--ink); border-radius: 0 0 20px 20px;
+          transition: width .25s ease, height .25s ease; overflow: hidden; }
+.island[data-size="hidden"] { width: 200px; height: 6px; background: transparent; }
+.island[data-size="pill"]   { width: 360px; height: 32px; }
+.island[data-size="open"]   { width: 420px; max-height: 360px; border-radius: 0 0 24px 24px; }
+
+.pill { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 10px; }
+.pill pilas-mascot { height: 28px; }
+.badge { min-width: 20px; height: 20px; border-radius: 10px; background: var(--deny); font-size: 12px; font-weight: 700;
+         display: grid; place-items: center; padding: 0 6px; }
+
+.panel { padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot[data-s="trabajando"] { background: var(--accent); }
+.dot[data-s="pendiente"]  { background: var(--deny); }
+.dot[data-s="en_espera"]  { background: #5b6584; }
+.dot[data-s="error"]      { background: #ffd84a; }
+.row .name { font-weight: 700; }
+.row .action { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.card-head { color: var(--muted); }
+.card-body { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; background: #111218;
+             border-radius: 10px; padding: 10px; max-height: 96px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+.buttons { display: flex; gap: 8px; }
+.buttons button { flex: 1; font: inherit; font-weight: 700; border: 0; border-radius: 10px; padding: 8px; cursor: pointer; color: #fff; }
+.b-allow { background: var(--allow); } .b-always { background: #2a2d3a; } .b-deny { background: var(--deny); }
+.link { background: none; border: 0; color: var(--muted); font: inherit; text-decoration: underline; cursor: pointer; padding: 0; align-self: center; }

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pilas · playground de la pilita</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; gap: 24px; background: #12131a;
+             color: #eef0f7; font-family: ui-rounded, system-ui, sans-serif; }
+      .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+      button { font: inherit; padding: 8px 16px; border-radius: 999px; border: 1px solid #3a3e52; background: none;
+               color: inherit; cursor: pointer; }
+      pilas-mascot { height: 240px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <pilas-mascot id="m" state="cargando"></pilas-mascot>
+      <div class="row">
+        <button data-s="dormida">Dormida</button><button data-s="cargando">Cargando</button>
+        <button data-s="alerta">Alerta</button><button data-s="llena">Llena</button>
+      </div>
+      <div class="row">
+        <button data-r="saludo">Saludo</button><button data-r="aplastada">Aplastada</button>
+        <button data-r="mareo">Mareo</button>
+      </div>
+      <div class="row">
+        <button data-snd="alerta">♪ alerta</button><button data-snd="listo">♪ listo</button>
+        <button data-snd="aprobado">♪ aprobado</button><button data-snd="denegado">♪ denegado</button>
+        <button data-snd="toque">♪ toque</button>
+      </div>
+    </main>
+    <script type="module">
+      import "./src/mascot/pilita.ts";
+      import { play } from "./src/sound/sfx.ts";
+      const m = document.getElementById("m");
+      document.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => (m.state = b.dataset.s)));
+      document.querySelectorAll("[data-r]").forEach((b) => (b.onclick = () => m.react(b.dataset.r)));
+      document.querySelectorAll("[data-snd]").forEach((b) => (b.onclick = () => play(b.dataset.snd)));
+    </script>
+  </body>
+</html>
