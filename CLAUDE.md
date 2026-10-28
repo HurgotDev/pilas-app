@@ -46,6 +46,7 @@ npm run dev                                  # solo la UI; playground de la pili
   ya fijados (estados `dormida`, `cargando`, `alerta`, `llena`; reacciones `saludo`, `aplastada`, `mareo`).
 - Los tipos de `ui/src/island/api.ts` deben reflejar `Snapshot` de `src-tauri/src/lib.rs`: si cambias uno, cambia el otro.
 - Antes de tocar el contrato con Claude Code, verifica en https://code.claude.com/docs/en/hooks y añade un test en `pilas-core`.
+- Ramas: `feat/*`/`fix/*` desde `develop` con un fragmento en `.changes/`; `develop` o `hotfix/*` → `main` es un release (ver `docs/RELEASING.md`).
 - Commits pequeños y en español, en imperativo: "Añade la tarjeta de preguntas".
 
 ## Estado inicial (importante)

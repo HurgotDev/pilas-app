@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "cargo test -p pilas-core -p pilas-hook -p pilas-jump",
     "tauri": "tauri",
-    "app": "tauri dev"
+    "app": "tauri dev",
+    "release:prepare": "node scripts/release.mjs prepare",
+    "test:scripts": "node --test scripts/release.test.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",

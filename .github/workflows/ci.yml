@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 jobs:
@@ -28,3 +28,70 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npm run test:scripts
+
+  # Check requerido: corre en cada evento; la lógica por rama vive en el step.
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check branch and release policy
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          node scripts/release.mjs check
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "Not a pull request: only fragments are checked."
+            exit 0
+          fi
+          fail=0
+          fragments() { find .changes -maxdepth 1 -name '*.md' ! -name README.md; }
+
+          case "$BASE" in
+            main)
+              if [ "$HEAD" != "develop" ] && [[ "$HEAD" != hotfix/* ]]; then
+                echo "::error::PRs into main must come from develop or hotfix/*, not '$HEAD'."
+                fail=1
+              fi
+              if [ -n "$(fragments)" ]; then
+                echo "::error::.changes/ still has fragments. Run 'npm run release:prepare' before merging into main."
+                fail=1
+              fi
+              head_version=$(node scripts/release.mjs version)
+              main_version=$(git show origin/main:src-tauri/tauri.conf.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
+              highest=$(printf '%s\n%s\n' "$main_version" "$head_version" | sort -V | tail -n1)
+              if [ "$head_version" = "$main_version" ] || [ "$highest" != "$head_version" ]; then
+                echo "::error::Version $head_version must be greater than main's $main_version. Run 'npm run release:prepare'."
+                fail=1
+              fi
+              if ! node scripts/release.mjs notes "$head_version" > /dev/null 2>&1; then
+                echo "::error::CHANGELOG.md has no section for $head_version."
+                fail=1
+              fi
+              ;;
+            develop)
+              if [[ "$HEAD" == release/* ]] || [ "$HEAD" = "main" ]; then
+                echo "Release or back-merge PR: no fragment required."
+              else
+                added=$(git diff --name-only --diff-filter=A origin/develop...HEAD)
+                # grep -c lee toda la entrada: sin SIGPIPE bajo pipefail.
+                count=$(printf '%s\n' "$added" | grep -E '^\.changes/[^/]+\.md$' | grep -cv '^\.changes/README\.md$' || true)
+                if [ "$count" -eq 0 ]; then
+                  echo "::error::Add a changelog fragment in .changes/<slug>.md (see .changes/README.md)."
+                  fail=1
+                fi
+              fi
+              ;;
+            *)
+              echo "Base '$BASE' has no extra rules."
+              ;;
+          esac
+          exit "$fail"

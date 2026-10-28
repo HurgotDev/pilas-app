@@ -1,27 +1,39 @@
 name: Release
 
+# Cada push a main es un release; workflow_dispatch solo deja el .dmg como artefacto.
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.version.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          version=$(node scripts/release.mjs version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "Tag v$version already exists: nothing to release."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.build == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Check tag matches tauri.conf.json version
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${version}"
-            exit 1
-          fi
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -68,10 +80,12 @@ jobs:
           name: pilas-dmg
           path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
 
-      - name: Create draft release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --generate-notes \
-            target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          node scripts/release.mjs notes "$VERSION" > notes.md
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Pilas $VERSION" \
+            --notes-file notes.md target/universal-apple-darwin/release/bundle/dmg/*.dmg
