@@ -39,6 +39,9 @@ export const resolvePermission = (requestId: string, choice: PermissionChoice) =
 export const answerQuestion = (requestId: string, answers: Record<string, string> | null) =>
   invoke<void>("answer_question", { requestId, answers });
 export const jumpToSession = (sessionId: string) => invoke<void>("jump_to_session", { sessionId });
+/** Modo visible de la isla; el backend dimensiona la ventana del panel. */
+export const setIslandMode = (mode: "hidden" | "pill" | "open", openHeight?: number) =>
+  invoke<void>("set_island_mode", { mode, openHeight: openHeight ?? null });
 
 export const onSnapshot = (cb: (s: Snapshot) => void) => listen<Snapshot>("pilas://snapshot", (e) => cb(e.payload));
 export const onPending = (cb: (requestId: string) => void) => listen<string>("pilas://pending", (e) => cb(e.payload));

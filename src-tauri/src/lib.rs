@@ -4,6 +4,7 @@
 //! - comandos para la WebView y eventos hacia ella,
 //! - (M1) comportamiento de la ventana como panel del notch.
 
+mod panel;
 mod server;
 
 use pilas_core::decision::{self, Answers, PermissionChoice};
@@ -35,6 +36,9 @@ pub(crate) struct Inner {
     pub pending: HashMap<String, PendingRequest>,
     /// Ids de solicitud en orden de llegada.
     pub queue: VecDeque<String>,
+    pub screen: panel::ScreenChoice,
+    pub mode: panel::IslandMode,
+    pub open_height: Option<f64>,
 }
 
 #[derive(Default)]
@@ -147,6 +151,27 @@ fn answer_question(
     })
 }
 
+/// La UI avisa del modo visible (y de la altura de la tarjeta abierta) para dimensionar la ventana.
+#[tauri::command]
+fn set_island_mode(app: AppHandle, state: State<'_, AppState>, mode: panel::IslandMode, open_height: Option<f64>) {
+    {
+        let mut inner = state.0.lock().unwrap();
+        inner.mode = mode;
+        inner.open_height = open_height;
+    }
+    apply_layout(&app);
+}
+
+/// Recoloca la isla con la pantalla, el modo y la altura guardados.
+fn apply_layout(app: &AppHandle) {
+    let (screen, mode, open_height) = {
+        let state = app.state::<AppState>();
+        let inner = state.0.lock().unwrap();
+        (inner.screen.clone(), inner.mode, inner.open_height)
+    };
+    panel::place(app, screen, mode, open_height);
+}
+
 #[tauri::command]
 fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     let target = {
@@ -172,9 +197,12 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory); // sin ícono en el Dock
 
-            // TODO(M1): convertir la ventana "island" en NSPanel (nivel sobre la barra de menú,
-            // visible en todos los Spaces, sin robar foco) y posicionarla sobre el notch o
-            // bajo la barra de menú del monitor principal. Ver docs/SPEC.md → Interfaz.
+            if let Some(window) = app.get_webview_window("island") {
+                panel::make_panel(&window);
+            }
+            apply_layout(app.handle());
+            let handle = app.handle().clone();
+            panel::watch_screens(move || apply_layout(&handle));
 
             server::start(app.handle().clone())?;
             Ok(())
@@ -183,7 +211,8 @@ pub fn run() {
             get_snapshot,
             resolve_permission,
             answer_question,
-            jump_to_session
+            jump_to_session,
+            set_island_mode
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Pilas");

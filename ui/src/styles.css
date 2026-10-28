@@ -10,12 +10,12 @@
 }
 html, body { margin: 0; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
 
-/* La isla es siempre negra para fundirse con el notch. */
-.island { margin: 0 auto; background: #000; color: var(--ink); border-radius: 0 0 20px 20px;
-          transition: width .25s ease, height .25s ease; overflow: hidden; }
-.island[data-size="hidden"] { width: 200px; height: 6px; background: transparent; }
-.island[data-size="pill"]   { width: 360px; height: 32px; }
-.island[data-size="open"]   { width: 420px; max-height: 360px; border-radius: 0 0 24px 24px; }
+/* La isla es siempre negra para fundirse con el notch. El ancho lo marca la ventana (ver panel.rs). */
+.island { margin: 0 auto; width: 100%; background: #000; color: var(--ink); border-radius: 0 0 20px 20px;
+          transition: height .25s ease; overflow: hidden; }
+.island[data-size="hidden"] { height: 6px; background: transparent; }
+.island[data-size="pill"]   { height: 32px; }
+.island[data-size="open"]   { max-height: 360px; border-radius: 0 0 24px 24px; }
 
 .pill { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 10px; }
 .pill pilas-mascot { height: 28px; }

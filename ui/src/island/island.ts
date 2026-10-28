@@ -6,10 +6,17 @@ import * as api from "./api";
 
 type Size = "hidden" | "pill" | "open";
 
+const OPEN_MAX_H = 360; // tope de la tarjeta abierta (styles.css); igual que en Rust
+const HIDDEN_H = 6; // alturas de la ventana por modo (styles.css)
+const PILL_H = 32;
+
 export function mountIsland(root: HTMLElement): void {
   let snap: api.Snapshot = { sessions: [], mascot: "dormida", pending: [] };
   let open = false;
+  let peek = false; // con la isla oculta, el cursor encima muestra la píldora
   let fullUntil = 0; // la pilita se muestra "llena" ~4 s tras terminar una sesión
+  let sent = { mode: "", h: 0 }; // último tamaño de ventana enviado al backend
+  let shrinkTimer = 0;
 
   root.innerHTML = `
     <div class="pill">
@@ -21,7 +28,23 @@ export function mountIsland(root: HTMLElement): void {
   const badge = root.querySelector(".badge") as HTMLElement;
   const panel = root.querySelector(".panel") as HTMLElement;
 
-  const size = (): Size => (snap.sessions.length === 0 && !open ? "hidden" : open ? "open" : "pill");
+  const size = (): Size => (open ? "open" : snap.sessions.length === 0 && !peek ? "hidden" : "pill");
+
+  // La ventana toma el tamaño de la isla. Al crecer se avisa antes de pintar; al encoger,
+  // tras la transición CSS (~250 ms) para no recortar la isla.
+  function syncWindow(): void {
+    clearTimeout(shrinkTimer);
+    const mode = size();
+    const h = mode === "open" ? Math.min(root.scrollHeight, OPEN_MAX_H) : mode === "pill" ? PILL_H : HIDDEN_H;
+    if (mode === sent.mode && h === sent.h) return;
+    const send = () => {
+      sent = { mode, h };
+      void api.setIslandMode(mode, mode === "open" ? h : undefined);
+    };
+    const grows = h > sent.h || (mode === "open" && sent.mode !== "open");
+    if (grows) send();
+    else shrinkTimer = window.setTimeout(send, 260);
+  }
 
   function mascotState(): PilitaState {
     if (snap.mascot === "alerta") return "alerta";
@@ -58,17 +81,18 @@ export function mountIsland(root: HTMLElement): void {
     badge.hidden = snap.pending.length === 0;
     badge.textContent = String(snap.pending.length);
     panel.hidden = !open;
-    if (!open) return;
-
-    const first = snap.pending[0];
-    panel.innerHTML = first
-      ? renderCard(first, 0)
-      : snap.sessions
-          .map((s) => `<div class="row" data-session="${s.session_id}">
-              <span class="dot" data-s="${s.state}"></span>
-              <span class="name">${esc(s.project)}</span>
-              <span class="action">${esc(s.last_action ?? "")}</span></div>`)
-          .join("");
+    if (open) {
+      const first = snap.pending[0];
+      panel.innerHTML = first
+        ? renderCard(first, 0)
+        : snap.sessions
+            .map((s) => `<div class="row" data-session="${s.session_id}">
+                <span class="dot" data-s="${s.state}"></span>
+                <span class="name">${esc(s.project)}</span>
+                <span class="action">${esc(s.last_action ?? "")}</span></div>`)
+            .join("");
+    }
+    syncWindow();
   }
 
   panel.addEventListener("click", async (e) => {
@@ -91,6 +115,17 @@ export function mountIsland(root: HTMLElement): void {
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { open = false; render(); }
+  });
+  // Clic fuera de la isla (la ventana pierde el foco) → contraer a píldora.
+  window.addEventListener("blur", () => {
+    if (open) { open = false; render(); }
+  });
+  // Con la isla oculta, el cursor sobre su franja la muestra un momento.
+  root.addEventListener("mouseenter", () => {
+    if (size() === "hidden") { peek = true; render(); }
+  });
+  root.addEventListener("mouseleave", () => {
+    if (peek) { peek = false; render(); }
   });
 
   api.onSnapshot((s) => { snap = s; if (s.pending.length === 0 && s.sessions.length === 0) open = false; render(); });
