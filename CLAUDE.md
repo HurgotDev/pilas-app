@@ -49,6 +49,10 @@ npm run dev                                  # solo la UI; playground de la pili
 - Antes de tocar el contrato con Claude Code, verifica en https://code.claude.com/docs/en/hooks y añade un test en `pilas-core`.
 - Ramas: `feat/*`/`fix/*` desde `develop` con un fragmento en `.changes/`; `develop` o `hotfix/*` → `main` es un release (ver `docs/RELEASING.md`).
 - Commits pequeños y en español, en imperativo: "Añade la tarjeta de preguntas".
+- `README.md` siempre al día: si un cambio altera lo que el usuario instala, configura, ve o usa
+  (funciones, ajustes, textos de la interfaz que cita el README, requisitos, privacidad) o los comandos
+  de desarrollo, actualiza el README en el mismo PR. Antes de abrir un PR, relee el README y confirma
+  que nada quedó desfasado; si no aplica, dilo en la casilla de la plantilla del PR.
 
 ## Estado inicial (importante)
 
