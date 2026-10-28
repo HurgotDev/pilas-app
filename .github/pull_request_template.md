@@ -1,15 +1,15 @@
-## Resumen
+## Summary
 
-<!-- Qué cambia y por qué. -->
+<!-- What changes and why. Write the PR in English. -->
 
 ## Checklist
 
-- [ ] Fragmento en `.changes/` (salvo PR de release o back-merge).
-- [ ] `README.md` actualizado, o no aplica: el cambio no altera lo que se
-      instala, configura, ve o usa, ni los comandos de desarrollo.
-- [ ] Docs afectadas al día (`docs/SPEC.md`, `docs/PLAN.md`,
+- [ ] Fragment in `.changes/` (except release or back-merge PRs).
+- [ ] `README.md` updated, or not applicable: the change does not alter what
+      users install, configure, see or use, nor the development commands.
+- [ ] Affected docs are current (`docs/SPEC.md`, `docs/PLAN.md`,
       `docs/RELEASING.md`).
 
-## Pruebas
+## Test plan
 
-<!-- Cómo se probó: comandos y pasos manuales. -->
+<!-- How it was tested: commands and manual steps. -->
