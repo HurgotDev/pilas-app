@@ -5,13 +5,19 @@ import { listen } from "@tauri-apps/api/event";
 export type SessionState = "en_espera" | "trabajando" | "pendiente" | "error";
 export type MascotState = "dormida" | "cargando" | "alerta";
 export type PermissionChoice = "allow" | "deny" | "always" | "terminal";
+export type ActionKind = "bash" | "edit" | "write" | "read" | "search_project" | "search_web" | "question" | "other";
+
+export interface LastAction {
+  kind: ActionKind;
+  arg: string | null;
+}
 
 export interface Session {
   session_id: string;
   project: string;
   cwd: string;
   state: SessionState;
-  last_action: string | null;
+  last_action: LastAction | null;
   pending: number;
   updated_ms: number;
 }

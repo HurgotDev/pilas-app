@@ -36,6 +36,12 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] Respuestas por `updatedInput.answers` (texto de la pregunta → etiquetas separadas por coma).
 - [x] Sin tarjetas duplicadas (el `PermissionRequest` de AskUserQuestion se ignora).
 
+## M4b · Idiomas (inglés y español)
+- [x] `ui/src/i18n.ts` con `t()` y diccionarios `en`/`es`; idioma del sistema.
+- [x] Todos los textos de la isla pasan por `t()`; inglés por defecto.
+- [x] `last_action` como datos (`{ kind, arg }`) en `pilas-core` y `Snapshot`.
+- [x] "Denied from Pilas" fijo en inglés.
+
 ## M5 · La pilita y los sonidos
 - [ ] Estados y reacciones integrados con la prioridad Alerta > Llena > Cargando > Dormida.
 - [ ] Sonidos con ajuste de activado y volumen; un solo recordatorio a los 60 s de un pendiente.
@@ -48,7 +54,7 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 ## M7 · Instalador, onboarding y ajustes
 - [ ] Copiar `pilas-hook` a `~/Library/Application Support/Pilas/bin/`.
 - [ ] Instalar hooks en `~/.claude/settings.json` con backup fechado, diff previo y sin tocar hooks ajenos.
-- [ ] Reparar y desinstalar solo las entradas de Pilas. Onboarding de 4 pasos. Ajustes en JSON.
+- [ ] Reparar y desinstalar solo las entradas de Pilas. Onboarding de 4 pasos. Ajustes en JSON (incluye idioma).
 
 ## M8 · Publicación
 - [ ] Workflow de release con `.dmg` universal en GitHub Actions.

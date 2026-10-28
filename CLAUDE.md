@@ -41,7 +41,8 @@ npm run dev                                  # solo la UI; playground de la pili
 
 - Rust estable, `cargo fmt` y `clippy` limpios. Errores con `thiserror` en librerías; nada de `unwrap()`
   fuera de tests salvo en locks de Mutex.
-- Textos de la interfaz y comentarios en español; identificadores en inglés salvo los nombres del dominio
+- Textos de la interfaz siempre vía `t()` de `ui/src/i18n.ts` (en/es, inglés por defecto);
+  comentarios en español; identificadores en inglés salvo los nombres del dominio
   ya fijados (estados `dormida`, `cargando`, `alerta`, `llena`; reacciones `saludo`, `aplastada`, `mareo`).
 - Los tipos de `ui/src/island/api.ts` deben reflejar `Snapshot` de `src-tauri/src/lib.rs`: si cambias uno, cambia el otro.
 - Antes de tocar el contrato con Claude Code, verifica en https://code.claude.com/docs/en/hooks y añade un test en `pilas-core`.

@@ -17,7 +17,8 @@ pub enum PermissionChoice {
     Terminal,
 }
 
-pub const DENY_MESSAGE: &str = "Denegado desde Pilas";
+/// Lo lee Claude, no el usuario: siempre en inglés.
+pub const DENY_MESSAGE: &str = "Denied from Pilas";
 
 /// Salida para un evento `PermissionRequest`. `None` = sin salida (diálogo nativo).
 pub fn permission_output(choice: &PermissionChoice, payload: &Value) -> Option<Value> {

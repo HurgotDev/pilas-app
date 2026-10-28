@@ -41,8 +41,8 @@ pub struct Session {
     pub pid: Option<u32>,
     pub term_program: Option<String>,
     pub state: SessionState,
-    /// "Editando src/app.ts", "Ejecutando npm test"…
-    pub last_action: Option<String>,
+    /// Qué hace la última herramienta; la UI lo traduce.
+    pub last_action: Option<LastAction>,
     /// Solicitudes bloqueantes abiertas (la app gestiona la cola y la baja al resolver).
     pub pending: u32,
     pub last_assistant_message: Option<String>,
@@ -74,8 +74,29 @@ fn project_of(cwd: &str) -> String {
     cwd.trim_end_matches('/').rsplit('/').next().unwrap_or(cwd).to_string()
 }
 
-/// Descripción corta de lo que hace una herramienta, para la lista de sesiones.
-pub fn describe_tool(payload: &Value) -> Option<String> {
+/// Última acción de una sesión: datos puros, el texto lo pone la UI.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LastAction {
+    pub kind: ActionKind,
+    /// Comando (Bash), ruta corta (archivos) o nombre de la herramienta (Other).
+    pub arg: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionKind {
+    Bash,
+    Edit,
+    Write,
+    Read,
+    SearchProject,
+    SearchWeb,
+    Question,
+    Other,
+}
+
+/// Qué hace una herramienta, para la lista de sesiones.
+pub fn describe_tool(payload: &Value) -> Option<LastAction> {
     let tool = protocol::tool_name(payload)?;
     let input = payload.get("tool_input");
     let field = |k: &str| input.and_then(|i| i.get(k)).and_then(Value::as_str);
@@ -88,16 +109,17 @@ pub fn describe_tool(payload: &Value) -> Option<String> {
             .collect::<Vec<_>>()
             .join("/")
     };
-    Some(match tool {
-        "Bash" => format!("Ejecutando {}", field("command").unwrap_or("un comando")),
-        "Edit" | "MultiEdit" => format!("Editando {}", field("file_path").map(short).unwrap_or_default()),
-        "Write" => format!("Escribiendo {}", field("file_path").map(short).unwrap_or_default()),
-        "Read" => format!("Leyendo {}", field("file_path").map(short).unwrap_or_default()),
-        "Grep" | "Glob" => "Buscando en el proyecto".to_string(),
-        "WebFetch" | "WebSearch" => "Buscando en la web".to_string(),
-        "AskUserQuestion" => "Tiene una pregunta".to_string(),
-        other => format!("Usando {other}"),
-    })
+    let (kind, arg) = match tool {
+        "Bash" => (ActionKind::Bash, field("command").map(str::to_string)),
+        "Edit" | "MultiEdit" => (ActionKind::Edit, field("file_path").map(short)),
+        "Write" => (ActionKind::Write, field("file_path").map(short)),
+        "Read" => (ActionKind::Read, field("file_path").map(short)),
+        "Grep" | "Glob" => (ActionKind::SearchProject, None),
+        "WebFetch" | "WebSearch" => (ActionKind::SearchWeb, None),
+        "AskUserQuestion" => (ActionKind::Question, None),
+        other => (ActionKind::Other, Some(other.to_string())),
+    };
+    Some(LastAction { kind, arg })
 }
 
 impl SessionStore {
@@ -329,8 +351,27 @@ mod tests {
     #[test]
     fn describe_herramientas() {
         let p = json!({ "tool_name": "Edit", "tool_input": { "file_path": "/a/b/src/app.ts" } });
-        assert_eq!(describe_tool(&p).unwrap(), "Editando src/app.ts");
+        let a = describe_tool(&p).unwrap();
+        assert_eq!((a.kind, a.arg.as_deref()), (ActionKind::Edit, Some("src/app.ts")));
         let p = json!({ "tool_name": "Bash", "tool_input": { "command": "npm test" } });
-        assert_eq!(describe_tool(&p).unwrap(), "Ejecutando npm test");
+        let a = describe_tool(&p).unwrap();
+        assert_eq!((a.kind, a.arg.as_deref()), (ActionKind::Bash, Some("npm test")));
+    }
+
+    #[test]
+    fn describe_mapea_cada_tipo() {
+        let kind = |tool: &str| describe_tool(&json!({ "tool_name": tool, "tool_input": {} })).unwrap();
+        assert_eq!(kind("Write").kind, ActionKind::Write);
+        assert_eq!(kind("Read").kind, ActionKind::Read);
+        assert_eq!(kind("Glob").kind, ActionKind::SearchProject);
+        assert_eq!(kind("WebSearch").kind, ActionKind::SearchWeb);
+        assert_eq!(kind("AskUserQuestion").kind, ActionKind::Question);
+        assert_eq!(
+            kind("Task"),
+            LastAction {
+                kind: ActionKind::Other,
+                arg: Some("Task".into())
+            }
+        );
     }
 }

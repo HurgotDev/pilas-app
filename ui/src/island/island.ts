@@ -2,6 +2,7 @@
 import type { PilitaMascot, PilitaState } from "../mascot/pilita";
 import { play } from "../sound/sfx";
 import * as api from "./api";
+import { t, type Key } from "../i18n";
 
 type Size = "hidden" | "pill" | "open";
 
@@ -10,18 +11,30 @@ const HIDDEN_H = 6; // alturas de la ventana por modo (styles.css)
 const PILL_H = 32;
 const OPEN_W = 420; // ancho de la ventana abierta; igual que en Rust
 
-const STATE_LABEL: Record<api.SessionState, string> = {
-  en_espera: "En espera",
-  trabajando: "Trabajando",
-  pendiente: "Pendiente",
-  error: "Error",
+const STATE_LABEL: Record<api.SessionState, Key> = {
+  en_espera: "state.en_espera",
+  trabajando: "state.trabajando",
+  pendiente: "state.pendiente",
+  error: "state.error",
 };
 
-const DEST: Record<string, string> = {
-  localSettings: "proyecto (local)",
-  projectSettings: "proyecto",
-  userSettings: "usuario",
-  session: "esta sesión",
+const DEST: Record<string, Key> = {
+  localSettings: "dest.localSettings",
+  projectSettings: "dest.projectSettings",
+  userSettings: "dest.userSettings",
+  session: "dest.session",
+};
+
+// Frase de last_action según su tipo; el backend solo manda datos.
+const ACTION: Record<api.ActionKind, Key> = {
+  bash: "act.bash",
+  edit: "act.edit",
+  write: "act.write",
+  read: "act.read",
+  search_project: "act.search_project",
+  search_web: "act.search_web",
+  question: "act.question",
+  other: "act.other",
 };
 
 interface Question {
@@ -42,13 +55,14 @@ function describeSuggestions(list: unknown[]): string[] {
   const lines: string[] = [];
   for (const raw of list) {
     const s = raw as { type?: string; rules?: { toolName: string; ruleContent?: string }[]; directories?: string[]; mode?: string; destination?: string };
-    const dest = DEST[s.destination ?? ""] ?? s.destination ?? "";
+    const key = DEST[s.destination ?? ""];
+    const dest = key ? t(key) : s.destination ?? "";
     if (s.type === "addRules") {
       for (const r of s.rules ?? []) lines.push(`${r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName} · ${dest}`);
     } else if (s.type === "addDirectories") {
-      for (const d of s.directories ?? []) lines.push(`Directorio: ${d} · ${dest}`);
+      for (const d of s.directories ?? []) lines.push(`${t("sugg.directory", { path: d })} · ${dest}`);
     } else if (s.type === "setMode") {
-      lines.push(`Modo: ${s.mode} · ${dest}`);
+      lines.push(`${t("sugg.mode", { mode: s.mode ?? "" })} · ${dest}`);
     } else {
       lines.push(`${JSON.stringify(raw)} · ${dest}`);
     }
@@ -56,12 +70,18 @@ function describeSuggestions(list: unknown[]): string[] {
   return lines;
 }
 
-// "ahora", "hace N min" o "hace N h" desde la última actividad de la sesión.
+// "ahora", "hace N min" o "hace N h" desde la última actividad (textos en i18n.ts).
 function ago(ms: number): string {
   const min = Math.floor((Date.now() - ms) / 60_000);
-  if (min < 1) return "ahora";
-  if (min < 60) return `hace ${min} min`;
-  return `hace ${Math.floor(min / 60)} h`;
+  if (min < 1) return t("ago.now");
+  if (min < 60) return t("ago.min", { n: min });
+  return t("ago.h", { n: Math.floor(min / 60) });
+}
+
+// Texto de last_action; sin argumento, un comando se muestra como "un comando" (i18n).
+function actionText(a: api.LastAction): string {
+  const arg = a.arg ?? (a.kind === "bash" ? t("arg.command") : "");
+  return t(ACTION[a.kind], { arg });
 }
 
 export function mountIsland(root: HTMLElement): void {
@@ -133,6 +153,11 @@ export function mountIsland(root: HTMLElement): void {
     return snap.mascot;
   }
 
+  // " · 1 de N" (o "1 of N") cuando hay más de una solicitud pendiente.
+  function counterOf(index: number): string {
+    return snap.pending.length > 1 ? t("card.counter", { i: index + 1, n: snap.pending.length }) : "";
+  }
+
   function esc(s: string): string {
     return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
   }
@@ -143,10 +168,10 @@ export function mountIsland(root: HTMLElement): void {
   }
 
   function renderQuestion(p: api.PendingView, index: number): string {
-    const counter = snap.pending.length > 1 ? ` · ${index + 1} de ${snap.pending.length}` : "";
+    const counter = counterOf(index);
     const qs = questionsOf(p);
-    const terminal = `<button class="link" data-q-terminal="${p.request_id}">Responder en la terminal</button>`;
-    if (qs.length === 0) return `<div class="card-head">${esc(p.project)} tiene una pregunta${counter}</div>${terminal}`;
+    const terminal = `<button class="link" data-q-terminal="${p.request_id}">${t("btn.terminal")}</button>`;
+    if (qs.length === 0) return `<div class="card-head">${esc(t("card.question", { project: p.project }))}${counter}</div>${terminal}`;
     const card = qCardOf(p);
     const q = qs[card.step];
     const picks = card.picks[card.step];
@@ -165,9 +190,9 @@ export function mountIsland(root: HTMLElement): void {
       .join("");
     const answered = card.picks.every((l) => l.length > 0);
     const actions = [
-      card.step > 0 ? `<button class="q-back" data-q-back>‹ Atrás</button>` : "",
-      q.multiSelect && !last ? `<button class="b-allow" data-q-next ${picks.length ? "" : "disabled"}>Siguiente</button>` : "",
-      last ? `<button class="b-allow" data-q-send ${answered ? "" : "disabled"}>Enviar</button>` : "",
+      card.step > 0 ? `<button class="q-back" data-q-back>${t("btn.prev")}</button>` : "",
+      q.multiSelect && !last ? `<button class="b-allow" data-q-next ${picks.length ? "" : "disabled"}>${t("btn.next")}</button>` : "",
+      last ? `<button class="b-allow" data-q-send ${answered ? "" : "disabled"}>${t("btn.send")}</button>` : "",
     ].join("");
     return `<div class="card-head">${esc(p.project)}${header}${steps}${counter}</div>
       <div class="q-text">${esc(q.question)}</div>
@@ -180,27 +205,27 @@ export function mountIsland(root: HTMLElement): void {
     const detail = p.tool_input
       ? String((p.tool_input as Record<string, unknown>).command ?? (p.tool_input as Record<string, unknown>).file_path ?? JSON.stringify(p.tool_input, null, 2))
       : "";
-    const counter = snap.pending.length > 1 ? ` · ${index + 1} de ${snap.pending.length}` : "";
+    const counter = counterOf(index);
     if (p.kind === "question") return renderQuestion(p, index);
     if (confirmAlways === p.request_id) {
       const lines = describeSuggestions(p.permission_suggestions ?? []);
-      return `<div class="card-head">Claude Code guardará estas reglas${counter}</div>
+      return `<div class="card-head">${t("card.rules")}${counter}</div>
         <div class="rules">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>
         <div class="buttons">
-          <button class="b-allow" data-confirm>Guardar y permitir</button>
-          <button class="b-always" data-back>Volver</button>
+          <button class="b-allow" data-confirm>${t("btn.save_allow")}</button>
+          <button class="b-always" data-back>${t("btn.back")}</button>
         </div>`;
     }
     const canAlways = (p.permission_suggestions ?? []).length > 0; // sin reglas sugeridas, Pilas no inventa "Siempre"
     return `<div class="card-head">${esc(p.project)} · ${esc(p.tool_name ?? "")}${counter}</div>
       <div class="card-body${expanded === p.request_id ? " expanded" : ""}">${esc(detail)}</div>
-      <button class="link" data-expand hidden>ver más</button>
+      <button class="link" data-expand hidden>${t("btn.more")}</button>
       <div class="buttons">
-        <button class="b-allow" data-choice="allow">Permitir</button>
-        ${canAlways ? `<button class="b-always" data-choice="always">Siempre</button>` : ""}
-        <button class="b-deny" data-choice="deny">Denegar</button>
+        <button class="b-allow" data-choice="allow">${t("btn.allow")}</button>
+        ${canAlways ? `<button class="b-always" data-choice="always">${t("btn.always")}</button>` : ""}
+        <button class="b-deny" data-choice="deny">${t("btn.deny")}</button>
       </div>
-      <button class="link" data-choice="terminal">Responder en la terminal</button>`;
+      <button class="link" data-choice="terminal">${t("btn.terminal")}</button>`;
   }
 
   // Tras pintar, ofrece "ver más" solo si el detalle pasa de 6 líneas, o "ver menos" si ya está expandido.
@@ -210,7 +235,7 @@ export function mountIsland(root: HTMLElement): void {
     if (!body || !more) return;
     const isExp = body.classList.contains("expanded");
     more.hidden = !isExp && body.scrollHeight <= body.clientHeight;
-    more.textContent = isExp ? "ver menos" : "ver más";
+    more.textContent = t(isExp ? "btn.less" : "btn.more");
   }
 
   // Única vía para decidir, compartida por clic y Enter: va por request_id exacto.
@@ -258,9 +283,9 @@ export function mountIsland(root: HTMLElement): void {
         ? renderCard(first, 0)
         : snap.sessions
             .map((s) => `<div class="row" data-session="${s.session_id}">
-                <span class="dot" data-s="${s.state}" title="${STATE_LABEL[s.state]}"></span>
+                <span class="dot" data-s="${s.state}" title="${t(STATE_LABEL[s.state])}"></span>
                 <span class="name">${esc(s.project)}</span>
-                <span class="action">${esc(s.last_action ?? "")}</span>
+                <span class="action">${esc(s.last_action ? actionText(s.last_action) : "")}</span>
                 <span class="ago">${ago(s.updated_ms)}</span></div>`)
             .join("");
       fitDetail();

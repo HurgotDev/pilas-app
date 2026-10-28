@@ -27,7 +27,8 @@ Un agente (Claude Code), una plataforma validada (macOS) y una terminal con salt
 | Saltar a la terminal | Exacto en Ghostty; resto: traer la app al frente |
 | Sonidos 8-bit generados en código | Con opción de silenciar |
 | Instalador de hooks con backup y diff | |
-| Ajustes mínimos | Pantalla, sonido, inicio con el sistema |
+| Ajustes mínimos | Pantalla, sonido, idioma, inicio con el sistema |
+| Idiomas | Inglés (por defecto) y español |
 
 Fuera de alcance: otros agentes, chat con IA, integraciones, diffs en vivo, uso del plan, app móvil, atajos
 globales, vestuario de la mascota, notificaciones del sistema, firma/notarización, builds oficiales de Windows y Linux.
@@ -115,6 +116,14 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
   con casillas y Enviar; varias preguntas en pasos "2/3" con "Atrás" que conserva lo elegido.
 - Pantallas: por defecto la principal. Con notch, la píldora se centra sobre él; sin notch, cuelga del centro del
   borde superior bajo la barra de menú. Ajuste: Principal / La del notch / Una concreta. Se recoloca sola.
+
+## Idiomas
+
+Inglés por defecto y español. Textos en `ui/src/i18n.ts` (diccionario `en`/`es`
+y `t()`, sin dependencias). Idioma: el del ajuste; si no hay, el del sistema
+(`es*` → español, resto → inglés). `pilas-core` no arma frases: manda la última
+acción como datos (`{ kind, arg }`) y la UI la traduce. El mensaje de denegar
+va a Claude, no al usuario: siempre en inglés ("Denied from Pilas").
 
 ## Mascota: la pilita
 
