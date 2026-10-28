@@ -2196,6 +2196,7 @@ name = "pilas"
 version = "0.1.0"
 dependencies = [
  "block2",
+ "libc",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
@@ -2219,6 +2220,7 @@ dependencies = [
 name = "pilas-hook"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "pilas-core",
  "serde_json",
  "uuid",

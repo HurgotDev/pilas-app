@@ -18,9 +18,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - Prueba: escribir en otra app mientras la isla cambia de tamaño; el foco nunca se pierde.
 
 ## M2 · Hook y sesiones de punta a punta
-- [ ] `pilas-hook` en release < 20 ms de arranque; con la app cerrada sale al instante.
-- [ ] Lista de sesiones con estado, proyecto, última acción y "hace N min".
-- [ ] Limpieza de sesiones huérfanas por `pid` cada 30 s.
+- [x] `pilas-hook` en release < 20 ms de arranque; con la app cerrada sale al instante.
+- [x] Lista de sesiones con estado, proyecto, última acción y "hace N min".
+- [x] Limpieza de sesiones huérfanas por `pid` cada 30 s.
 - Prueba: 3 sesiones en paralelo en `~/pilas-sandbox` (ver `docs/HOOKS-DEV.md`).
 
 ## M3 · Permisos

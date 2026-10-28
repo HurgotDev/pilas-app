@@ -9,7 +9,7 @@ mod server;
 
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
-use pilas_core::session::{MascotState, Session, SessionStore};
+use pilas_core::session::{MascotState, Session, SessionStore, StoreEvent};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -190,6 +190,49 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
         .map_err(|e| e.to_string())
 }
 
+/// El proceso sigue existiendo (señal 0; EPERM también cuenta: existe, sin permiso).
+fn pid_alive(pid: u32) -> bool {
+    let Ok(pid) = i32::try_from(pid) else { return false };
+    unsafe { libc::kill(pid, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
+}
+
+/// Cada 30 s quita las sesiones cuyo proceso ya no existe (sin SessionEnd).
+fn spawn_prune(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+        let changed = {
+            let state = app.state::<AppState>();
+            let mut inner = state.0.lock().unwrap();
+            let removed: Vec<String> = inner
+                .store
+                .prune(pid_alive)
+                .into_iter()
+                .filter_map(|e| match e {
+                    StoreEvent::Removed(id) => Some(id),
+                    _ => None,
+                })
+                .collect();
+            // Las solicitudes de esas sesiones ya no tienen a quién responder.
+            let gone: Vec<String> = inner
+                .pending
+                .iter()
+                .filter(|(_, req)| removed.contains(&req.session_id))
+                .map(|(rid, _)| rid.clone())
+                .collect();
+            for rid in gone {
+                if let Some(req) = inner.pending.remove(&rid) {
+                    let _ = req.tx.send(Outcome::HookGone);
+                }
+                inner.queue.retain(|r| r != &rid);
+            }
+            !removed.is_empty()
+        };
+        if changed {
+            emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+        }
+    });
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
@@ -205,6 +248,7 @@ pub fn run() {
             panel::watch_screens(move || apply_layout(&handle));
 
             server::start(app.handle().clone())?;
+            spawn_prune(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

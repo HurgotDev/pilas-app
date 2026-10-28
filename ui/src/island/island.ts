@@ -10,6 +10,21 @@ const OPEN_MAX_H = 360; // tope de la tarjeta abierta (styles.css); igual que en
 const HIDDEN_H = 6; // alturas de la ventana por modo (styles.css)
 const PILL_H = 32;
 
+const STATE_LABEL: Record<api.SessionState, string> = {
+  en_espera: "En espera",
+  trabajando: "Trabajando",
+  pendiente: "Pendiente",
+  error: "Error",
+};
+
+// "ahora", "hace N min" o "hace N h" desde la última actividad de la sesión.
+function ago(ms: number): string {
+  const min = Math.floor((Date.now() - ms) / 60_000);
+  if (min < 1) return "ahora";
+  if (min < 60) return `hace ${min} min`;
+  return `hace ${Math.floor(min / 60)} h`;
+}
+
 export function mountIsland(root: HTMLElement): void {
   let snap: api.Snapshot = { sessions: [], mascot: "dormida", pending: [] };
   let open = false;
@@ -87,9 +102,10 @@ export function mountIsland(root: HTMLElement): void {
         ? renderCard(first, 0)
         : snap.sessions
             .map((s) => `<div class="row" data-session="${s.session_id}">
-                <span class="dot" data-s="${s.state}"></span>
+                <span class="dot" data-s="${s.state}" title="${STATE_LABEL[s.state]}"></span>
                 <span class="name">${esc(s.project)}</span>
-                <span class="action">${esc(s.last_action ?? "")}</span></div>`)
+                <span class="action">${esc(s.last_action ?? "")}</span>
+                <span class="ago">${ago(s.updated_ms)}</span></div>`)
             .join("");
     }
     syncWindow();
@@ -130,5 +146,7 @@ export function mountIsland(root: HTMLElement): void {
   api.onPending(() => { open = true; play("alerta"); render(); });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
   api.getSnapshot().then((s) => { snap = s; render(); });
+  // Refresca los "hace N min" mientras la lista está abierta.
+  setInterval(() => { if (open) render(); }, 30_000);
   render();
 }

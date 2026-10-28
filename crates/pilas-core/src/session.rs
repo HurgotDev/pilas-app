@@ -135,6 +135,19 @@ impl SessionStore {
         self.sessions.remove(id)
     }
 
+    /// Quita las sesiones cuyo `pid` ya no existe (sin `SessionEnd`). Sin `pid` se quedan.
+    pub fn prune(&mut self, alive: impl Fn(u32) -> bool) -> Vec<StoreEvent> {
+        let mut out = vec![];
+        self.sessions.retain(|id, s| {
+            let keep = s.pid.is_none_or(&alive);
+            if !keep {
+                out.push(StoreEvent::Removed(id.clone()));
+            }
+            keep
+        });
+        out
+    }
+
     /// Marca una solicitud bloqueante como resuelta (o abandonada).
     pub fn resolve_pending(&mut self, id: &str) -> Option<StoreEvent> {
         let s = self.sessions.get_mut(id)?;
@@ -293,6 +306,24 @@ mod tests {
         ));
         st.apply(&msg("PermissionRequest", json!({ "tool_name": "AskUserQuestion" })));
         assert_eq!(st.get("s1").unwrap().pending, 1);
+    }
+
+    #[test]
+    fn prune_quita_solo_pids_muertos() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("SessionStart", json!({}))); // s1, pid 1 (muerto)
+        let mut vivo = msg("SessionStart", json!({ "session_id": "s2" }));
+        vivo.pid = Some(2);
+        st.apply(&vivo);
+        let mut sin_pid = msg("SessionStart", json!({ "session_id": "s3" }));
+        sin_pid.pid = None;
+        st.apply(&sin_pid);
+
+        let ev = st.prune(|pid| pid == 2);
+        assert_eq!(ev, vec![StoreEvent::Removed("s1".into())]);
+        assert!(st.get("s1").is_none());
+        assert!(st.get("s2").is_some());
+        assert!(st.get("s3").is_some());
     }
 
     #[test]

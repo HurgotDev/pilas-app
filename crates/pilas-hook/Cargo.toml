@@ -9,3 +9,7 @@ license.workspace = true
 pilas-core = { path = "../pilas-core" }
 serde_json.workspace = true
 uuid.workspace = true
+
+# find_tty en macOS lee el TTY de los procesos ancestros sin lanzar `ps`.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

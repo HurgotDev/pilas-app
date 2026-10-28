@@ -23,6 +23,8 @@ fn run() -> Option<()> {
         return None; // p. ej. PermissionRequest de AskUserQuestion: salida vacía
     }
 
+    // Conectar antes de buscar el TTY: si Pilas no corre, salimos sin trabajo extra.
+    let stream = transport::connect()?;
     let blocking = protocol::is_blocking(&event, &payload);
     let (pid, tty) = find_tty();
     let msg = HookMessage {
@@ -37,7 +39,7 @@ fn run() -> Option<()> {
         payload,
     };
 
-    let reply = transport::send(&msg)?;
+    let reply = transport::send(stream, &msg)?;
     if let Some(reply) = reply {
         if reply.id != msg.id || reply.v > PROTOCOL_VERSION {
             return None;
@@ -51,38 +53,40 @@ fn run() -> Option<()> {
 
 /// Recorre los procesos ancestros hasta el primero con TTY (el proceso de Claude Code).
 /// Los hooks corren sin terminal controladora, así que no podemos leer /dev/tty.
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 fn find_tty() -> (Option<u32>, Option<String>) {
     let mut pid = std::os::unix::process::parent_id();
     for _ in 0..12 {
-        let out = std::process::Command::new("ps")
-            .args(["-o", "ppid=,tty=", "-p", &pid.to_string()])
-            .output();
-        let Ok(out) = out else { break };
-        let text = String::from_utf8_lossy(&out.stdout);
-        let mut parts = text.split_whitespace();
-        let (Some(ppid), Some(tty)) = (parts.next(), parts.next()) else {
+        let Some(info) = bsd_info(pid) else { break };
+        // NODEV (-1 como dev_t) indica que el proceso no tiene terminal.
+        if info.e_tdev != u32::MAX {
+            let name = unsafe { libc::devname(info.e_tdev as libc::dev_t, libc::S_IFCHR) };
+            if !name.is_null() {
+                let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_string_lossy();
+                return (Some(pid), Some(format!("/dev/{name}")));
+            }
+        }
+        if info.pbi_ppid <= 1 {
             break;
-        };
-        if tty != "??" && tty != "?" {
-            let tty = if tty.starts_with("/dev/") {
-                tty.to_string()
-            } else {
-                format!("/dev/{tty}")
-            };
-            return (Some(pid), Some(tty));
         }
-        match ppid.parse::<u32>() {
-            Ok(p) if p > 1 => pid = p,
-            _ => break,
-        }
+        pid = info.pbi_ppid;
     }
     (None, None)
 }
 
-#[cfg(not(unix))]
+/// Información BSD de un proceso (sin lanzar `ps`).
+#[cfg(target_os = "macos")]
+fn bsd_info(pid: u32) -> Option<libc::proc_bsdinfo> {
+    let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+    let size = std::mem::size_of::<libc::proc_bsdinfo>() as i32;
+    let buf = &mut info as *mut _ as *mut std::ffi::c_void;
+    let n = unsafe { libc::proc_pidinfo(pid as i32, libc::PROC_PIDTBSDINFO, 0, buf, size) };
+    (n == size).then_some(info)
+}
+
+#[cfg(not(target_os = "macos"))]
 fn find_tty() -> (Option<u32>, Option<String>) {
-    (None, None) // TODO(v1.2): Windows
+    (None, None) // TODO(v1.2): Windows y Linux
 }
 
 #[cfg(unix)]
@@ -92,11 +96,13 @@ mod transport {
     use std::os::unix::net::UnixStream;
     use std::time::Duration;
 
+    /// Conecta con la app. Un socket sin listener falla al instante: si Pilas no corre, salimos ya.
+    pub fn connect() -> Option<UnixStream> {
+        UnixStream::connect(pilas_core::paths::socket_path()?).ok()
+    }
+
     /// Envía el mensaje. Devuelve `Some(Some(reply))` si era bloqueante y la app respondió.
-    pub fn send(msg: &HookMessage) -> Option<Option<AppReply>> {
-        let path = pilas_core::paths::socket_path()?;
-        // Un socket local sin listener falla al instante: si Pilas no corre, salimos ya.
-        let mut stream = UnixStream::connect(path).ok()?;
+    pub fn send(mut stream: UnixStream, msg: &HookMessage) -> Option<Option<AppReply>> {
         stream.set_write_timeout(Some(Duration::from_millis(300))).ok()?;
         let mut line = serde_json::to_string(msg).ok()?;
         line.push('\n');
@@ -116,7 +122,21 @@ mod transport {
 #[cfg(not(unix))]
 mod transport {
     use super::*;
-    pub fn send(_msg: &HookMessage) -> Option<Option<AppReply>> {
+    pub fn connect() -> Option<()> {
         None // TODO(v1.2): named pipe en Windows
+    }
+    pub fn send(_stream: (), _msg: &HookMessage) -> Option<Option<AppReply>> {
+        None
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn el_proceso_actual_tiene_info_bsd() {
+        let info = bsd_info(std::process::id()).expect("proc_pidinfo del propio proceso");
+        assert_eq!(info.pbi_pid, std::process::id());
     }
 }

@@ -18,6 +18,7 @@ serde.workspace = true
 serde_json.workspace = true
 pilas-core = { path = "../crates/pilas-core" }
 pilas-jump = { path = "../crates/pilas-jump" }
+libc = "0.2"
 
 # Panel del notch (src-tauri/src/panel.rs): bindings de AppKit ya presentes en Cargo.lock vía Tauri.
 [target.'cfg(target_os = "macos")'.dependencies]
