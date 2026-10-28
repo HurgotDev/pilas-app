@@ -133,7 +133,7 @@ pub fn apply(action: Action) -> Result<Option<PathBuf>, String> {
 /// Copia el binario del hook junto a la app a la carpeta de datos (escritura temporal + rename).
 fn copy_hook(dest: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
-    // shortcut: en desarrollo copia target/debug/pilas-hook; M8 lo empaqueta como externalBin de la app
+    // shortcut: en desarrollo copia target/debug/pilas-hook; en release lo empaqueta el workflow de publicación (bundle.macOS.files → MacOS/pilas-hook, universal y firmado ad-hoc)
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let src = exe.parent().ok_or("el ejecutable no tiene carpeta")?.join(HOOK_NAME);
     if !src.exists() {

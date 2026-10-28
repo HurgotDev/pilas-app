@@ -60,4 +60,4 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 
 ## M8 · Publicación
 - [ ] Workflow de release con `.dmg` universal en GitHub Actions.
-- [ ] README con instrucciones para abrir una app sin notarizar.
+- [x] README con instrucciones para abrir una app sin notarizar.

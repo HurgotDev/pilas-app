@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches tauri.conf.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${version}"
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - run: cargo build -p pilas-hook --release --target aarch64-apple-darwin
+      - run: cargo build -p pilas-hook --release --target x86_64-apple-darwin
+      - name: Create universal pilas-hook
+        run: |
+          mkdir -p target/universal-apple-darwin/release
+          lipo -create -output target/universal-apple-darwin/release/pilas-hook \
+            target/aarch64-apple-darwin/release/pilas-hook \
+            target/x86_64-apple-darwin/release/pilas-hook
+          codesign --force --sign - target/universal-apple-darwin/release/pilas-hook
+
+      - name: Build universal app
+        run: |
+          npx tauri build --target universal-apple-darwin --bundles app,dmg \
+            --config '{"bundle":{"macOS":{"signingIdentity":"-","files":{"MacOS/pilas-hook":"../target/universal-apple-darwin/release/pilas-hook"}}}}'
+
+      - name: Verify architectures and signature
+        run: |
+          app=target/universal-apple-darwin/release/bundle/macos/Pilas.app
+          for bin in "$app/Contents/MacOS/pilas" "$app/Contents/MacOS/pilas-hook"; do
+            archs=$(lipo -archs "$bin" | tr ' ' '\n' | sort | xargs)
+            if [ "$archs" != "arm64 x86_64" ]; then
+              echo "::error::${bin} has architectures: ${archs}"
+              exit 1
+            fi
+          done
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+      - name: Upload dmg artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilas-dmg
+          path: target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+      - name: Create draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --generate-notes \
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg
