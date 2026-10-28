@@ -11,8 +11,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 ## M1 · La isla en su sitio (riesgo alto: hacerlo primero)
 - [x] Convertir la ventana en `NSPanel`: nivel por encima de la barra de menú, en todos los Spaces, sin robar foco.
       Evaluar `tauri-nspanel` (comunidad) y, si no basta, un módulo propio con `objc2`.
-- [x] Posicionar sobre el notch de la pantalla del MacBook; en un monitor externo principal, centrada bajo la barra de menú.
-- [x] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
+- [ ] Posicionar sobre el notch de la pantalla del MacBook; en un monitor externo principal, centrada bajo la barra de menú.
+- [ ] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
+      Pendiente: probar con monitor externo y la recolocación; con notch ya funciona.
 - [x] Click-through fuera de la píldora y área de hover de 6 px cuando está oculta.
 - Prueba: escribir en otra app mientras la isla cambia de tamaño; el foco nunca se pierde.
 
