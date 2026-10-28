@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{mpsc, Mutex};
+use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -310,13 +311,36 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Lado en píxeles del icono de la barra de menú (18 pt a 2x).
+const TRAY_LADO: usize = 36;
+
+/// Icono de plantilla de la pila: macOS usa solo el alfa, así que el color da igual.
+fn tray_icon() -> Image<'static> {
+    // Rectángulos inclusivos (x0, y0, x1, y1) en píxeles.
+    let dentro =
+        |x: usize, y: usize, (x0, y0, x1, y1): (usize, usize, usize, usize)| x >= x0 && x <= x1 && y >= y0 && y <= y1;
+    let mut rgba = vec![0u8; TRAY_LADO * TRAY_LADO * 4];
+    for y in 0..TRAY_LADO {
+        for x in 0..TRAY_LADO {
+            let marco = dentro(x, y, (2, 10, 30, 25)) && !dentro(x, y, (4, 12, 28, 23));
+            let borne = dentro(x, y, (31, 15, 33, 20));
+            let carga = dentro(x, y, (9, 15, 14, 20)) || dentro(x, y, (18, 15, 23, 20));
+            if marco || borne || carga {
+                rgba[(y * TRAY_LADO + x) * 4 + 3] = 255;
+            }
+        }
+    }
+    Image::new_owned(rgba, TRAY_LADO as u32, TRAY_LADO as u32)
+}
+
 /// Icono de la barra de menú: abrir ajustes o salir.
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     // shortcut: etiquetas en inglés porque el backend no tiene i18n; traducir cuando haya más textos nativos
     let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit Pilas", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
-    let mut tray = TrayIconBuilder::new()
+    TrayIconBuilder::new()
+        .icon(tray_icon())
         .menu(&menu)
         .icon_as_template(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -325,11 +349,8 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             }
             "quit" => app.exit(0),
             _ => {}
-        });
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
-    tray.build(app)?;
+        })
+        .build(app)?;
     Ok(())
 }
 
@@ -376,4 +397,24 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Pilas");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn icono_de_bandeja_es_plantilla_36x36() {
+        let icono = tray_icon();
+        let alfa = |x: usize, y: usize| icono.rgba()[(y * TRAY_LADO + x) * 4 + 3];
+        assert_eq!(icono.rgba().len(), 36 * 36 * 4);
+        assert_eq!(icono.width(), 36);
+        assert_eq!(icono.height(), 36);
+        assert_eq!(alfa(0, 0), 0);
+        assert_eq!(alfa(35, 35), 0);
+        assert_eq!(alfa(2, 17), 255, "el marco debe ser opaco");
+        assert_eq!(alfa(17, 10), 255, "el marco superior debe ser opaco");
+        assert_eq!(alfa(32, 17), 255, "el borne debe ser opaco");
+        assert_eq!(alfa(5, 17), 0, "el interior sin carga debe ser transparente");
+    }
 }
