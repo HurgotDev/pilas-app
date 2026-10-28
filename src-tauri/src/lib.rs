@@ -39,6 +39,9 @@ pub(crate) struct Inner {
     pub screen: panel::ScreenChoice,
     pub mode: panel::IslandMode,
     pub open_height: Option<f64>,
+    /// Sesión → id de terminal de Ghostty, guardado tras un salto exacto.
+    // shortcut: las entradas de sesiones terminadas no se borran, son pocos bytes; limpiar si crece
+    pub terminal_ids: HashMap<String, String>,
 }
 
 #[derive(Default)]
@@ -181,13 +184,24 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
             term_program: s.term_program.clone(),
             tty: s.tty.clone(),
             cwd: Some(s.cwd.clone()),
-            cached_terminal_id: None, // TODO(M6): cachear el id devuelto por un salto exacto
+            cached_terminal_id: inner.terminal_ids.get(&session_id).cloned(),
         }
     };
-    pilas_jump::jumper_for(target.term_program.as_deref())
+    let had_cache = target.cached_terminal_id.is_some();
+    let outcome = pilas_jump::jumper_for(target.term_program.as_deref())
         .jump(&target)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    let mut inner = state.0.lock().unwrap();
+    match outcome {
+        pilas_jump::JumpOutcome::Exact { terminal_id: Some(id) } => {
+            inner.terminal_ids.insert(session_id, id);
+        }
+        pilas_jump::JumpOutcome::AppOnly if had_cache => {
+            inner.terminal_ids.remove(&session_id);
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 /// El proceso sigue existiendo (señal 0; EPERM también cuenta: existe, sin permiso).

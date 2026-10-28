@@ -68,41 +68,29 @@ impl GhosttyJumper {
         Ok(JumpOutcome::AppOnly)
     }
 
-    fn focus_by_id(id: &str) -> Result<bool, JumpError> {
-        // TODO(M6): confirmar en Script Editor (Ghostty.sdef) la sintaxis exacta para referenciar por id.
-        let script = format!(
-            "tell application \"Ghostty\"\n\
-               set ts to (every terminal whose id is {id})\n\
-               if (count of ts) is 1 then\n\
-                 focus (item 1 of ts)\n\
-                 activate\n\
-                 return \"ok\"\n\
-               end if\n\
-               return \"none\"\n\
-             end tell",
-            id = as_literal(id)
-        );
-        Ok(osascript(&script)? == "ok")
-    }
-
-    /// Busca por directorio de trabajo; devuelve el id solo si hay exactamente una coincidencia.
-    fn focus_by_cwd(cwd: &str) -> Result<Option<String>, JumpError> {
-        let script = format!(
-            "tell application \"Ghostty\"\n\
-               set ts to (every terminal whose working directory is {cwd})\n\
-               if (count of ts) is 1 then\n\
-                 set t to item 1 of ts\n\
-                 focus t\n\
-                 activate\n\
-                 return (id of t) as text\n\
-               end if\n\
-               return \"\"\n\
-             end tell",
-            cwd = as_literal(cwd)
-        );
-        let id = osascript(&script)?;
+    /// Enfoca la terminal cuya propiedad `property` (fija, de nuestro código) vale `value`.
+    /// Devuelve su id solo si hay exactamente una coincidencia.
+    fn focus_unique(property: &str, value: &str) -> Result<Option<String>, JumpError> {
+        let id = osascript(&unique_script(property, value))?;
         Ok((!id.is_empty()).then_some(id))
     }
+}
+
+/// Script que enfoca la única terminal con `property == value`; si hay 0 o varias, no hace nada.
+fn unique_script(property: &str, value: &str) -> String {
+    format!(
+        "tell application \"Ghostty\"\n\
+           set ts to (every terminal whose {property} is {value})\n\
+           if (count of ts) is 1 then\n\
+             set t to item 1 of ts\n\
+             focus t\n\
+             activate\n\
+             return (id of t) as text\n\
+           end if\n\
+           return \"\"\n\
+         end tell",
+        value = as_literal(value)
+    )
 }
 
 impl TerminalJumper for GhosttyJumper {
@@ -111,18 +99,17 @@ impl TerminalJumper for GhosttyJumper {
     }
 
     fn jump(&self, target: &JumpTarget) -> Result<JumpOutcome, JumpError> {
-        if let Some(id) = &target.cached_terminal_id {
-            if Self::focus_by_id(id).unwrap_or(false) {
-                return Ok(JumpOutcome::Exact {
-                    terminal_id: Some(id.clone()),
-                });
-            }
-        }
-        // TODO(M6): coincidencia por TTY. Pendiente verificar si el diccionario de Ghostty expone
-        // el TTY de cada terminal (pregunta abierta en la spec). Hasta entonces: cwd + fallo cerrado.
-        if let Some(cwd) = &target.cwd {
-            if let Ok(Some(id)) = Self::focus_by_cwd(cwd) {
-                return Ok(JumpOutcome::Exact { terminal_id: Some(id) });
+        // Pasos en orden de fiabilidad; un error en un paso no corta los demás.
+        let steps = [
+            ("id", target.cached_terminal_id.as_deref()),
+            ("tty", target.tty.as_deref()),
+            ("working directory", target.cwd.as_deref()),
+        ];
+        for (property, value) in steps {
+            if let Some(value) = value {
+                if let Ok(Some(id)) = Self::focus_unique(property, value) {
+                    return Ok(JumpOutcome::Exact { terminal_id: Some(id) });
+                }
             }
         }
         Self::activate()
@@ -170,6 +157,13 @@ mod tests {
     #[test]
     fn escapa_literales() {
         assert_eq!(as_literal(r#"/a "b"\c"#), r#""/a \"b\"\\c""#);
+    }
+
+    #[test]
+    fn script_exige_coincidencia_unica() {
+        let s = unique_script("tty", "/dev/ttys004");
+        assert!(s.contains(r#"whose tty is "/dev/ttys004""#));
+        assert!(s.contains("(count of ts) is 1"));
     }
 
     #[test]

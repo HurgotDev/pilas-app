@@ -48,9 +48,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
   se persiste en M7); un solo recordatorio a los 60 s de un pendiente.
 
 ## M6 · Saltar a Ghostty
-- [ ] Verificar en Script Editor (Ghostty.sdef) si cada terminal expone su TTY; si sí, emparejar por TTY.
-- [ ] Cachear el id de terminal tras un salto exacto; respaldo por cwd solo con coincidencia única.
-- [ ] Fallo cerrado: sin coincidencia segura, solo `activate`.
+- [x] Verificar en Script Editor (Ghostty.sdef) si cada terminal expone su TTY; si sí, emparejar por TTY.
+- [x] Cachear el id de terminal tras un salto exacto; respaldo por cwd solo con coincidencia única.
+- [x] Fallo cerrado: sin coincidencia segura, solo `activate`.
 
 ## M7 · Instalador, onboarding y ajustes
 - [ ] Copiar `pilas-hook` a `~/Library/Application Support/Pilas/bin/`.
