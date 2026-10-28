@@ -77,7 +77,7 @@ El release necesita estos secretos del repo (Settings → Secrets):
 - `TAURI_SIGNING_PRIVATE_KEY`: clave privada de minisign que firma el
   tarball del updater. Sin ella el job falla con un mensaje claro.
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: contraseña de esa clave.
-- `HOMEBREW_TOKEN`: token con permiso de escritura en
+- `HOMEBREW_TAP_TOKEN`: token con permiso de escritura en
   `HurgotDev/homebrew-tap`. Si falta, el cask no se actualiza, pero el
   release se publica igual (aparece un aviso).
 
