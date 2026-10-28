@@ -26,10 +26,10 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - Prueba: 3 sesiones en paralelo en `~/pilas-sandbox` (ver `docs/HOOKS-DEV.md`).
 
 ## M3 · Permisos
-- [ ] Tarjeta de permiso con Permitir / Siempre / Denegar y "Responder en la terminal".
-- [ ] "Siempre" muestra qué regla se guardará (de `permission_suggestions`) antes de confirmar.
-- [ ] Cola FIFO con "1 de N"; al responder en la terminal la tarjeta desaparece sola.
-- [ ] `Enter` permite y `Esc` cierra cuando la isla tiene foco.
+- [x] Tarjeta de permiso con Permitir / Siempre / Denegar y "Responder en la terminal".
+- [x] "Siempre" muestra qué regla se guardará (de `permission_suggestions`) antes de confirmar.
+- [x] Cola FIFO con "1 de N"; al responder en la terminal la tarjeta desaparece sola.
+- [x] `Enter` permite y `Esc` cierra cuando la isla tiene foco.
 
 ## M4 · Preguntas (AskUserQuestion)
 - [ ] Tarjeta con 1 a 4 preguntas en pasos, selección única y múltiple, botón Enviar.

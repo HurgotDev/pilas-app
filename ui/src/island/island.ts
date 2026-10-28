@@ -18,6 +18,32 @@ const STATE_LABEL: Record<api.SessionState, string> = {
   error: "Error",
 };
 
+const DEST: Record<string, string> = {
+  localSettings: "proyecto (local)",
+  projectSettings: "proyecto",
+  userSettings: "usuario",
+  session: "esta sesión",
+};
+
+// Una línea por regla o directorio que Claude Code guardaría con "Siempre".
+function describeSuggestions(list: unknown[]): string[] {
+  const lines: string[] = [];
+  for (const raw of list) {
+    const s = raw as { type?: string; rules?: { toolName: string; ruleContent?: string }[]; directories?: string[]; mode?: string; destination?: string };
+    const dest = DEST[s.destination ?? ""] ?? s.destination ?? "";
+    if (s.type === "addRules") {
+      for (const r of s.rules ?? []) lines.push(`${r.ruleContent ? `${r.toolName}(${r.ruleContent})` : r.toolName} · ${dest}`);
+    } else if (s.type === "addDirectories") {
+      for (const d of s.directories ?? []) lines.push(`Directorio: ${d} · ${dest}`);
+    } else if (s.type === "setMode") {
+      lines.push(`Modo: ${s.mode} · ${dest}`);
+    } else {
+      lines.push(`${JSON.stringify(raw)} · ${dest}`);
+    }
+  }
+  return lines;
+}
+
 // "ahora", "hace N min" o "hace N h" desde la última actividad de la sesión.
 function ago(ms: number): string {
   const min = Math.floor((Date.now() - ms) / 60_000);
@@ -35,6 +61,9 @@ export function mountIsland(root: HTMLElement): void {
   let shrinkTimer = 0;
   let seq = 0; // invalida aplicaciones de tamaño pendientes
   let pillW = window.innerWidth; // ancho de la píldora = ancho de la ventana fuera del modo abierto
+  // Estado de la tarjeta por request_id: deja de coincidir al llegar otro pendiente, así que no hace falta resetearlo.
+  let confirmAlways: string | null = null; // paso de confirmación de "Siempre"
+  let expanded: string | null = null; // detalle expandido ("ver más")
 
   root.innerHTML = `
     <div class="pill">
@@ -103,14 +132,42 @@ export function mountIsland(root: HTMLElement): void {
       return `<div class="card-head">${esc(p.project)} tiene una pregunta${counter}</div>
         <button class="link" data-q-terminal="${p.request_id}">Responder en la terminal</button>`;
     }
+    if (confirmAlways === p.request_id) {
+      const lines = describeSuggestions(p.permission_suggestions ?? []);
+      return `<div class="card-head">Claude Code guardará estas reglas${counter}</div>
+        <div class="rules">${lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>
+        <div class="buttons">
+          <button class="b-allow" data-confirm>Guardar y permitir</button>
+          <button class="b-always" data-back>Volver</button>
+        </div>`;
+    }
+    const canAlways = (p.permission_suggestions ?? []).length > 0; // sin reglas sugeridas, Pilas no inventa "Siempre"
     return `<div class="card-head">${esc(p.project)} · ${esc(p.tool_name ?? "")}${counter}</div>
-      <div class="card-body">${esc(detail)}</div>
+      <div class="card-body${expanded === p.request_id ? " expanded" : ""}">${esc(detail)}</div>
+      <button class="link" data-expand hidden>ver más</button>
       <div class="buttons">
         <button class="b-allow" data-choice="allow">Permitir</button>
-        <button class="b-always" data-choice="always">Siempre</button>
+        ${canAlways ? `<button class="b-always" data-choice="always">Siempre</button>` : ""}
         <button class="b-deny" data-choice="deny">Denegar</button>
       </div>
       <button class="link" data-choice="terminal">Responder en la terminal</button>`;
+  }
+
+  // Tras pintar, ofrece "ver más" solo si el detalle pasa de 6 líneas, o "ver menos" si ya está expandido.
+  function fitDetail(): void {
+    const body = panel.querySelector<HTMLElement>(".card-body");
+    const more = panel.querySelector<HTMLElement>("[data-expand]");
+    if (!body || !more) return;
+    const isExp = body.classList.contains("expanded");
+    more.hidden = !isExp && body.scrollHeight <= body.clientHeight;
+    more.textContent = isExp ? "ver menos" : "ver más";
+  }
+
+  // Única vía para decidir, compartida por clic y Enter: va por request_id exacto.
+  async function decide(p: api.PendingView, choice: api.PermissionChoice): Promise<void> {
+    confirmAlways = null;
+    await api.resolvePermission(p.request_id, choice);
+    play(choice === "deny" ? "denegado" : "aprobado");
   }
 
   function render(): void {
@@ -128,17 +185,30 @@ export function mountIsland(root: HTMLElement): void {
                 <span class="action">${esc(s.last_action ?? "")}</span>
                 <span class="ago">${ago(s.updated_ms)}</span></div>`)
             .join("");
+      fitDetail();
     }
     syncWindow();
   }
 
   panel.addEventListener("click", async (e) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-choice],[data-session],[data-q-terminal]");
+    const el = (e.target as HTMLElement).closest<HTMLElement>(
+      "[data-choice],[data-confirm],[data-back],[data-expand],[data-session],[data-q-terminal]",
+    );
+    const first = snap.pending[0];
     if (!el) return;
-    if (el.dataset.choice && snap.pending[0]) {
-      const choice = el.dataset.choice as api.PermissionChoice;
-      await api.resolvePermission(snap.pending[0].request_id, choice);
-      play(choice === "deny" ? "denegado" : "aprobado");
+    if (el.hasAttribute("data-back")) {
+      confirmAlways = null;
+      render();
+    } else if (el.hasAttribute("data-expand") && first) {
+      expanded = expanded === first.request_id ? null : first.request_id;
+      render();
+    } else if (el.dataset.choice === "always" && first) {
+      confirmAlways = first.request_id; // "Siempre" no decide: primero muestra las reglas
+      render();
+    } else if (el.dataset.choice && first) {
+      await decide(first, el.dataset.choice as api.PermissionChoice);
+    } else if (el.hasAttribute("data-confirm") && first) {
+      await decide(first, "always");
     } else if (el.dataset.qTerminal) {
       await api.answerQuestion(el.dataset.qTerminal, null);
     } else if (el.dataset.session) {
@@ -152,6 +222,12 @@ export function mountIsland(root: HTMLElement): void {
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { open = false; render(); }
+    // Enter decide sobre la tarjeta de permiso; con un botón enfocado, su activación nativa ya actúa.
+    const first = snap.pending[0];
+    if (e.key !== "Enter" || !open || !first || first.kind !== "permission" || e.repeat) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.target instanceof HTMLButtonElement) return;
+    e.preventDefault();
+    void decide(first, confirmAlways === first.request_id ? "always" : "allow");
   });
   // Clic fuera de la isla (la ventana pierde el foco) → contraer a píldora.
   window.addEventListener("blur", () => {
