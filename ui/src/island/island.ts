@@ -330,8 +330,14 @@ export function mountIsland(root: HTMLElement): void {
     }
   });
 
+  // Abrir/cerrar va en la píldora y no en la pilita: chocaría con los 3 clics del mareo.
+  root.querySelector(".pill")!.addEventListener("click", (e) => {
+    if ((e.target as Element).closest("pilas-mascot")) return;
+    open = !open;
+    render();
+  });
   mascot.addEventListener("pilita-click", () => {
-    if (mascot.state !== "alerta") play("toque"); // en alerta no hay reacciones ni sonido de toque
+    if (mascot.state !== "alerta") { play("toque"); return; } // en alerta no hay reacciones ni sonido de toque
     open = !open;
     render();
   });

@@ -105,7 +105,7 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
 | --- | --- | --- |
 | Oculta | Sin sesiones | Área de hover de 6 px en el borde superior |
 | Píldora | Hay sesiones | Pilita a la izquierda, contador de pendientes a la derecha; 32 px de alto |
-| Abierta | Clic o llega un pendiente | Lista de sesiones o tarjeta; 420 × hasta 360 px |
+| Abierta | Clic en la píldora (no en la pilita, salvo en Alerta) o llega un pendiente | Lista de sesiones o tarjeta; 420 × hasta 360 px |
 
 - Pendiente nuevo: la isla se abre sola, suena la alerta, sin tomar el foco. Varios: FIFO con "1 de N".
 - Clic fuera o `Esc` contrae a píldora; el pendiente sigue en cola.
