@@ -3,6 +3,7 @@ import type { PilitaMascot, PilitaState } from "../mascot/pilita";
 import { configure, play } from "../sound/sfx";
 import * as api from "./api";
 import { setLang, t, type Key } from "../i18n";
+import { resolveSkin, type SkinChoice } from "../mascot/skins";
 
 type Size = "hidden" | "pill" | "open";
 
@@ -99,6 +100,7 @@ export function mountIsland(root: HTMLElement): void {
   // Progreso de AskUserQuestion: paso actual y elecciones por pregunta; se reinicia si cambia la tarjeta.
   let qCard: { id: string; step: number; picks: string[][] } | null = null;
   let openOnPending = true; // ajuste "Abrir la isla al llegar una solicitud"
+  let skinChoice: SkinChoice = "auto"; // ajuste "Disfraz"; la skin efectiva depende de la fecha
 
   root.innerHTML = `
     <div class="pill">
@@ -375,11 +377,20 @@ export function mountIsland(root: HTMLElement): void {
     }, 60_000);
   });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
-  // Ajustes: idioma, sonido y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
+  // Skin efectiva en la pilita, en la raíz (puntos de calabaza en styles.css) y en los sonidos.
+  function applySkin(): void {
+    const skin = resolveSkin(skinChoice, new Date());
+    mascot.skin = skin;
+    document.documentElement.dataset.skin = skin;
+    configure({ skin });
+  }
+  // Ajustes: idioma, sonido, disfraz y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
   function applySettings(s: api.Settings): void {
     setLang(s.lang);
     configure({ enabled: s.sound_enabled, volume: s.volume });
     openOnPending = s.open_on_pending;
+    skinChoice = s.skin;
+    applySkin();
     render();
   }
   api.getSettings().then(applySettings);
@@ -387,5 +398,7 @@ export function mountIsland(root: HTMLElement): void {
   api.getSnapshot().then((s) => { snap = s; render(); });
   // Refresca los "hace N min" mientras la lista está abierta.
   setInterval(() => { if (open) render(); }, 30_000);
+  // Cada hora, para que en Automático la temporada empiece y acabe sin reiniciar.
+  setInterval(applySkin, 3_600_000);
   render();
 }
