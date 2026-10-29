@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/pilas-core", "crates/pilas-hook", "crates/pilas-jump", "src-tauri"]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 authors = ["Hugo Gutierrez"]

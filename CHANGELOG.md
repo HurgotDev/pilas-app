@@ -7,6 +7,16 @@ follows [Semantic Versioning](https://semver.org/).
 Sections are generated with `npm run release:prepare` from the fragments in
 `.changes/` (see `docs/RELEASING.md`).
 
+## [0.4.0] - 2026-10-29
+
+### Added
+
+- Add a Christmas costume for the pilita, with its own sounds and snow on the island.
+
+### Fixes and improvements
+
+- Bring the Settings window to the front with focus when it opens.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added
