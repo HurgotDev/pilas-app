@@ -160,6 +160,7 @@ macOS pedirá permiso de Automatización la primera vez. Código en `crates/pila
 
 App de barra de menú sin Dock (`ActivationPolicy::Accessory`). Onboarding: bienvenida → conectar con Claude Code
 (muestra el diff de `~/.claude/settings.json`) → aviso de Automatización → reiniciar sesiones abiertas.
+El último paso incluye el interruptor "Iniciar con el sistema" (por defecto Sí).
 Instalador: copia `pilas-hook` a `~/Library/Application Support/Pilas/bin/`, backup fechado, fusiona sin borrar
 hooks ajenos (identifica los suyos por la ruta del binario), no escribe si el JSON es inválido, verifica y
 ofrece reparar al iniciar, desinstala solo lo suyo.
