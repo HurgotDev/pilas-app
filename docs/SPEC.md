@@ -236,12 +236,27 @@ pilita vuelve sola a la clásica sin reiniciar la app.
 - **Contador de pendientes**: bola roja con el número encima. Con 0 no se ve.
 - **Ambiente de la isla**, detrás del contenido y sin clics, sin tapar texto
   ni botones:
-  - Unos pocos copos de nieve que caen despacio.
-  - Resplandor cálido tenue en el borde inferior.
+  - Copos de nieve que caen despacio, de distintos tamaños, repartidos por
+    toda la isla.
+  - Un muñeco de nieve troll vive en el borde inferior de la isla y encadena
+    acciones al azar: caminar o correr hasta un punto al azar, pararse,
+    saludar, tirar una bola de nieve (vuela en arco y se deshace, sin tocar
+    a la pilita ni provocar reacciones), y darse la vuelta para enseñar el
+    trasero meneándolo, o resbalarse y caer de espaldas para luego
+    levantarse. Mide unos 18 px de alto, para que se vean los detalles.
+    Ni el orden, ni la duración, ni el destino se
+    repiten de forma fija.
+  - Resplandor rojo en el borde inferior.
   - Acentos rojo/verde: separadores, enlaces y anillo de foco.
   - No cambian: los colores de estado ni Permitir/Denegar.
-  - Con `prefers-reduced-motion` no cae nieve.
-  - Solo CSS (y SVG en línea).
+  - Con `prefers-reduced-motion` no cae nieve ni aparece el muñeco.
+  - Nieve, resplandor y poses del muñeco en CSS y SVG en línea. Excepción a
+    "sin temporizadores de JS": el muñeco usa un solo `setTimeout`
+    encadenado que elige la siguiente acción. Solo corre con la skin
+    `christmas` activa y sin reduced motion, y se detiene al cambiar de
+    skin. La elección vive en una función pura
+    (`ui/src/island/snowman.ts`, `nextAction(rand, x)`) con tests en
+    `snowman.test.ts`.
 - **Sonidos**: variantes de cascabeles de Alerta, Listo, Toque y Mareo, misma
   forma de onda 8-bit, duración parecida (±20 %) y mismo volumen. El resto
   usa los clásicos. Nunca en bucle.

@@ -34,7 +34,8 @@ Spanish).
 - Seasonal costumes: from October 15 to November 2 the pilita dresses up
   for Halloween, with its own sounds, a bat flying across the island and
   pumpkin counters; from December 1 to 26 it wears a Santa hat, with
-  jingle-bell sounds, snow falling on the island and bauble counters. Pick
+  jingle-bell sounds, snow falling on the island, a troll snowman that
+  wanders around and bauble counters. Pick
   **Automatic**, **Classic**, **Halloween** or **Christmas** under
   **Costume** in Settings.
 
