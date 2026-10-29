@@ -25,12 +25,14 @@ Cada PR de `feat/*` o `fix/*` a `develop` añade un archivo
 
 ```
 ---
-bump: minor   # patch | minor | major
+bump: minor   # none | patch | minor | major
 ---
 Add the hook installer with backup and diff.
 ```
 
 - `patch`: correcciones. `minor`: novedades. `major`: cambios incompatibles.
+  `none`: no hace falta versión nueva (docs, README, CI); no cuenta para la
+  versión ni aparece en `CHANGELOG.md`.
 - El cuerpo es una frase en inglés, en imperativo; será una viñeta en
   `CHANGELOG.md`.
 - `node scripts/release.mjs check` valida todos los fragmentos.
@@ -54,14 +56,23 @@ de la actual y del bump más alto entre los fragmentos (semver estricto: con
    `CHANGELOG.md` y borra los fragmentos consumidos.
 2. Revisa `CHANGELOG.md`, haz commit ("Prepare version X.Y.Z") y sube la rama.
 3. Abre un PR de `release/<fecha>` directamente a `main`. CI comprueba que no
-   queden fragmentos, que la versión sea mayor que la de `main` y que el
-   changelog tenga su sección.
+   queden fragmentos, que la versión no sea menor que la de `main` y, si es
+   mayor, que el changelog tenga su sección.
 4. Fusiónalo con **Create a merge commit** (no squash). Al entrar en `main`,
    `.github/workflows/release.yml` compila el `.dmg`, crea la etiqueta
    `vX.Y.Z` y publica el release con las notas del changelog. Si la etiqueta
    ya existe, no hace nada.
 5. Automático: el job `backmerge` del mismo workflow lleva `main` a `develop`
    (ver la sección siguiente). No tienes que abrir nada más.
+
+## Release sin versión
+
+Si todos los fragmentos son `bump: none`, `npm run release:prepare` imprime
+`no release needed: version stays at X.Y.Z`, borra los fragmentos y no toca
+la versión ni `CHANGELOG.md`. El PR de `release/<fecha>` a `main` mantiene la
+misma versión y CI lo permite (solo avisa). Al fusionarlo, `release.yml` no
+publica nada porque la etiqueta `vX.Y.Z` ya existe, y el back-merge a
+`develop` corre igual.
 
 ## Hotfix
 
@@ -74,11 +85,12 @@ de la actual y del bump más alto entre los fragmentos (semver estricto: con
 
 ## Back-merge automático
 
-Tras publicar un release, el job `backmerge` de `release.yml`:
+Tras publicar un release (o tras un push sin release), el job `backmerge` de
+`release.yml`:
 
 1. Si `develop` ya contiene todo `main`, no hace nada.
 2. Si ya hay un PR abierto de `main` a `develop`, lo reutiliza. Si no, lo
-   crea con el título "Back-merge main into develop after X.Y.Z".
+   crea con el título "Back-merge main into develop (X.Y.Z)".
 3. Activa el auto-merge con commit de merge. El PR se fusiona cuando pasan
    los checks de CI.
 
