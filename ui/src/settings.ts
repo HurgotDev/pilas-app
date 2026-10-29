@@ -3,7 +3,7 @@ import "./mascot/pilita";
 import * as api from "./island/api";
 import { configure, play } from "./sound/sfx";
 import { lang, setLang, t, type Key, type Lang } from "./i18n";
-import { resolveSkin, type SkinChoice } from "./mascot/skins";
+import { resolveSkin, SKINS, type SkinChoice } from "./skins/index.ts";
 import { getVersion } from "@tauri-apps/api/app";
 
 const STEPS = 4;
@@ -212,12 +212,7 @@ function settingsView(): string {
     ["es", t("set.lang.es")],
   ];
   const langCurrent = settings.lang ?? "system";
-  const skinOpts: [SkinChoice, Key][] = [
-    ["auto", "set.skin.auto"],
-    ["classic", "set.skin.classic"],
-    ["halloween", "set.skin.halloween"],
-    ["christmas", "set.skin.christmas"],
-  ];
+  const skinOpts: [SkinChoice, Key][] = [["auto", "set.skin.auto"], ...Object.values(SKINS).map((k): [SkinChoice, Key] => [k.id, k.label])];
   const vol = Math.round(settings.volume * 100);
   const preview = diff
     ? `<div class="diff">${diffHtml(diff.lines)}</div>

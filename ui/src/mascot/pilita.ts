@@ -4,7 +4,7 @@
  * Uso:
  *   <pilas-mascot state="cargando" style="height: 28px"></pilas-mascot>
  *   el.state = "alerta";            // dormida | cargando | alerta | llena
- *   el.skin = "halloween";          // classic (por defecto) | halloween | christmas
+ *   el.skin = "classic";            // cualquier id del registro de skins (ui/src/skins)
  *   el.react("saludo");             // saludo | aplastada | mareo
  *   el.addEventListener("pilita-click", (e) => abrirTarjeta(e.detail.reaction));
  *       // detail.reaction: "mareo" | "aplastada" | null (null = ya estaba mareada)
@@ -14,7 +14,7 @@
  * Se dibuja en SVG dentro de Shadow DOM, sin dependencias. Respeta prefers-reduced-motion.
  */
 
-import type { Skin } from "./skins";
+import { SKINS, type Skin } from "../skins/index.ts";
 
 export type PilitaState = "dormida" | "cargando" | "alerta" | "llena";
 export type PilitaReaction = "saludo" | "aplastada" | "mareo";
@@ -40,7 +40,6 @@ const STATE_POSE: Record<PilitaState, Pose> = {
 
 const REACTION_MS: Record<PilitaReaction, number> = { saludo: 1100, aplastada: 900, mareo: 2000 };
 const STATES: PilitaState[] = ["dormida", "cargando", "alerta", "llena"];
-const SKINS: Skin[] = ["classic", "halloween", "christmas"];
 
 const INK = "#1B1B2E";
 
@@ -60,17 +59,6 @@ const TEMPLATE = /* html */ `
   .c-dark  { fill: var(--dark);  transition: fill .4s ease; }
   .c-foot  { fill: var(--foot);  transition: fill .4s ease; }
   .s-body  { stroke: var(--body); transition: stroke .4s ease; }
-
-  /* Skin halloween: solo cambia el LED y añade sombrero (el murciélago vuela en la isla); el color del cuerpo sigue diciendo el estado.
-     Todo queda dentro del viewBox (y >= 0) para que la skin clásica y el recorte de la píldora no cambien. */
-  svg[data-skin="halloween"] { --led:#FF8A1F; }
-  .skin-h { display: none; }
-  svg[data-skin="halloween"] .skin-h { display: inline; }
-  /* Skin christmas: gorro de Papá Noel en el mismo hueco que el de bruja y LEDs alternos rojo/verde. */
-  .skin-c { display: none; }
-  svg[data-skin="christmas"] .skin-c { display: inline; }
-  svg[data-skin="christmas"] .lit-0, svg[data-skin="christmas"] .lit-2 { --led:#FF4D5E; }
-  svg[data-skin="christmas"] .lit-1, svg[data-skin="christmas"] .lit-3 { --led:#5CFF8A; }
 
   /* Variantes: solo se ve la que pide la pose */
   .v { display: none; }
@@ -243,19 +231,8 @@ const TEMPLATE = /* html */ `
       <rect class="lit lit-3" x="85" y="112" width="12" height="7" rx="3.5"/>
     </g>
 
-    <!-- sombrero de bruja sobre el terminal (halloween) -->
-    <g class="skin-h">
-      <ellipse cx="70" cy="30" rx="36" ry="8" fill="#2A1A4A"/>
-      <path d="M48 29 L58 12 Q64 3 80 1 Q72 7 76 13 L92 29 Z" fill="#3B2566"/>
-      <path d="M53.7 25 L56.6 20 L83 20 L88 25 Z" fill="#FF8A1F"/>
-    </g>
-    <!-- gorro de Papá Noel sobre el terminal (christmas); cabe en la caja del de bruja (y 1..38) -->
-    <g class="skin-c">
-      <path d="M50 28 Q52 6 74 4 Q92 3 100 18 L95 21 Q88 12 82 13 Q88 20 90 28 Z" fill="#D7263D"/>
-      <path d="M74 4 Q92 3 100 18 L97 19.5 Q90 9 76 8 Z" fill="#A81B30"/>
-      <rect x="46" y="24" width="48" height="12" rx="6" fill="#F4F4F8"/>
-      <circle cx="99" cy="19" r="5.5" fill="#F4F4F8"/>
-    </g>
+    <!-- ranura del accesorio de la skin sobre el borne: dentro del rig, así se mueve con ella -->
+    <g class="accessory"></g>
   </g>
 
   <!-- extras fuera del cuerpo -->
@@ -280,6 +257,9 @@ export class PilitaMascot extends HTMLElement {
   static observedAttributes = ["state", "skin"];
 
   private svg!: SVGSVGElement;
+  private accessory!: SVGGElement;
+  private lit!: SVGElement[];
+  private dressed: Skin | null = null; // skin cuyo vestuario está pintado
   private reaction: PilitaReaction | null = null;
   private reactionTimers: number[] = [];
   private blinkTimer = 0;
@@ -290,6 +270,8 @@ export class PilitaMascot extends HTMLElement {
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = TEMPLATE;
     this.svg = root.querySelector("svg")!;
+    this.accessory = root.querySelector(".accessory")!;
+    this.lit = [...root.querySelectorAll<SVGElement>(".lit")];
   }
 
   get state(): PilitaState {
@@ -303,7 +285,7 @@ export class PilitaMascot extends HTMLElement {
 
   get skin(): Skin {
     const s = this.getAttribute("skin") as Skin;
-    return SKINS.includes(s) ? s : "classic";
+    return Object.keys(SKINS).includes(s) ? s : "classic";
   }
 
   set skin(value: Skin) {
@@ -370,7 +352,6 @@ export class PilitaMascot extends HTMLElement {
     const p = this.pose(phase);
     const d = this.svg.dataset;
     d.state = this.state;
-    d.skin = this.skin;
     d.eyes = p.eyes;
     d.mouth = p.mouth;
     d.leds = p.leds;
@@ -380,6 +361,21 @@ export class PilitaMascot extends HTMLElement {
     }
     if (this.reaction) d.react = this.reaction; else delete d.react;
     this.svg.setAttribute("aria-label", `Pilita: ${this.state}`);
+    this.dress();
+  }
+
+  // Vestuario de la skin: solo el accesorio en su ranura y el tinte de los LEDs encendidos; la identidad no cambia.
+  private dress(): void {
+    if (this.dressed === this.skin) return;
+    this.dressed = this.skin;
+    const mascot = SKINS[this.skin].mascot;
+    this.accessory.innerHTML = mascot?.accessory ?? "";
+    const leds = mascot?.leds ?? [];
+    // Sin colores queda el --led amarillo por defecto; con menos colores que LEDs se reparten en ciclo.
+    this.lit.forEach((el, i) => {
+      if (leds.length) el.style.setProperty("--led", leds[i % leds.length]);
+      else el.style.removeProperty("--led");
+    });
   }
 
   private onEnter = (): void => {
