@@ -84,7 +84,7 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     `test:ui` en `package.json` y en Comandos de `CLAUDE.md`.
   - Verificar: `cargo test -p pilas`, `npm run test:ui` (bordes 14/15 oct y
     2/3 nov), `npm run typecheck`, `cargo clippy --workspace -- -D warnings`.
-- [ ] T2 · Pilita con disfraz de Halloween.
+- [x] T2 · Pilita con disfraz de Halloween.
   - Hecho: atributo observado `skin` en `ui/src/mascot/pilita.ts`; sombrero
     dentro del `rig`, murciélago sin solaparse con "z", exclamación ni
     destellos, LEDs naranja; quieto con reduced-motion; encuadre ajustado

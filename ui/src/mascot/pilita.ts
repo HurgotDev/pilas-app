@@ -4,6 +4,7 @@
  * Uso:
  *   <pilas-mascot state="cargando" style="height: 28px"></pilas-mascot>
  *   el.state = "alerta";            // dormida | cargando | alerta | llena
+ *   el.skin = "halloween";          // classic (por defecto) | halloween
  *   el.react("saludo");             // saludo | aplastada | mareo
  *   el.addEventListener("pilita-click", (e) => abrirTarjeta(e.detail.reaction));
  *       // detail.reaction: "mareo" | "aplastada" | null (null = ya estaba mareada)
@@ -12,6 +13,8 @@
  * En "alerta" no hay reacciones: el clic solo emite "pilita-click".
  * Se dibuja en SVG dentro de Shadow DOM, sin dependencias. Respeta prefers-reduced-motion.
  */
+
+import type { Skin } from "./skins";
 
 export type PilitaState = "dormida" | "cargando" | "alerta" | "llena";
 export type PilitaReaction = "saludo" | "aplastada" | "mareo";
@@ -37,6 +40,7 @@ const STATE_POSE: Record<PilitaState, Pose> = {
 
 const REACTION_MS: Record<PilitaReaction, number> = { saludo: 1100, aplastada: 900, mareo: 2000 };
 const STATES: PilitaState[] = ["dormida", "cargando", "alerta", "llena"];
+const SKINS: Skin[] = ["classic", "halloween"];
 
 const INK = "#1B1B2E";
 
@@ -47,7 +51,7 @@ const TEMPLATE = /* html */ `
   svg { width: 100%; height: 100%; overflow: visible; }
 
   /* Paleta por estado: cuerpo, sombra, oscuro, patas */
-  svg { --body:#4F7DF3; --shade:#3B63D6; --dark:#2A47A8; --foot:#22398A; }
+  svg { --led:#FFE066; --body:#4F7DF3; --shade:#3B63D6; --dark:#2A47A8; --foot:#22398A; }
   svg[data-state="dormida"] { --body:#5B6584; --shade:#4A5370; --dark:#3A4159; --foot:#2E3448; }
   svg[data-state="alerta"]  { --body:#EF4B5F; --shade:#D23349; --dark:#9E1F33; --foot:#8A1A2C; }
   svg[data-state="llena"]   { --body:#34C46A; --shade:#24A554; --dark:#1C7A43; --foot:#17643A; }
@@ -56,6 +60,17 @@ const TEMPLATE = /* html */ `
   .c-dark  { fill: var(--dark);  transition: fill .4s ease; }
   .c-foot  { fill: var(--foot);  transition: fill .4s ease; }
   .s-body  { stroke: var(--body); transition: stroke .4s ease; }
+
+  /* Skin halloween: solo cambia el LED y añade sombrero y murciélago; el color del cuerpo sigue diciendo el estado.
+     Todo queda dentro del viewBox (y >= 0) para que la skin clásica y el recorte de la píldora no cambien. */
+  svg[data-skin="halloween"] { --led:#FF8A1F; }
+  .skin-h { display: none; }
+  svg[data-skin="halloween"] .skin-h { display: inline; }
+  .bat { animation: batfloat 2.6s ease-in-out infinite; }
+  .wing { transform-box: fill-box; animation: batflap .5s ease-in-out infinite alternate; }
+  .wing-l { transform-origin: 100% 50%; } .wing-r { transform-origin: 0 50%; }
+  @keyframes batfloat { 50% { transform: translate(2px, -3px); } }
+  @keyframes batflap  { to { transform: scaleY(.45); } }
 
   /* Variantes: solo se ve la que pide la pose */
   .v { display: none; }
@@ -79,7 +94,7 @@ const TEMPLATE = /* html */ `
   svg[data-brazo]            .x-brazo { display: inline; }
 
   /* LEDs */
-  .lit { opacity: 0; transition: opacity .3s ease; }
+  .lit { fill: var(--led); opacity: 0; transition: opacity .3s ease; }
   svg[data-leds="2"] .lit-0, svg[data-leds="2"] .lit-1, svg[data-leds="4"] .lit { opacity: 1; }
   svg[data-leds="ciclo"] .lit-0 { animation: led0 2.4s infinite; }
   svg[data-leds="ciclo"] .lit-1 { animation: led1 2.4s infinite; }
@@ -222,12 +237,28 @@ const TEMPLATE = /* html */ `
       <rect class="c-foot" x="57" y="112" width="12" height="7" rx="3.5"/>
       <rect class="c-foot" x="71" y="112" width="12" height="7" rx="3.5"/>
       <rect class="c-foot" x="85" y="112" width="12" height="7" rx="3.5"/>
-      <rect class="lit lit-0" x="43" y="112" width="12" height="7" rx="3.5" fill="#FFE066"/>
-      <rect class="lit lit-1" x="57" y="112" width="12" height="7" rx="3.5" fill="#FFE066"/>
-      <rect class="lit lit-2" x="71" y="112" width="12" height="7" rx="3.5" fill="#FFE066"/>
-      <rect class="lit lit-3" x="85" y="112" width="12" height="7" rx="3.5" fill="#FFE066"/>
+      <rect class="lit lit-0" x="43" y="112" width="12" height="7" rx="3.5"/>
+      <rect class="lit lit-1" x="57" y="112" width="12" height="7" rx="3.5"/>
+      <rect class="lit lit-2" x="71" y="112" width="12" height="7" rx="3.5"/>
+      <rect class="lit lit-3" x="85" y="112" width="12" height="7" rx="3.5"/>
+    </g>
+
+    <!-- sombrero de bruja sobre el terminal (halloween) -->
+    <g class="skin-h">
+      <ellipse cx="70" cy="30" rx="36" ry="8" fill="#2A1A4A"/>
+      <path d="M48 29 L58 12 Q64 3 80 1 Q72 7 76 13 L92 29 Z" fill="#3B2566"/>
+      <path d="M53.7 25 L56.6 20 L83 20 L88 25 Z" fill="#FF8A1F"/>
     </g>
   </g>
+
+  <!-- murciélago (halloween), arriba a la izquierda; libre de zzz, "!" y destellos -->
+  <g class="skin-h"><g class="bat">
+    <path class="wing wing-l" d="M16 12 Q9 3 2 8 Q5 11 5 16 Q9 13 11 18 Q14 17 16 19 Z" fill="#9B7BE0"/>
+    <path class="wing wing-r" d="M26 12 Q33 3 40 8 Q37 11 37 16 Q33 13 31 18 Q28 17 26 19 Z" fill="#9B7BE0"/>
+    <ellipse cx="21" cy="15" rx="5" ry="7" fill="#9B7BE0"/>
+    <path d="M17.5 9 L18 3 L20.5 8 M24.5 9 L24 3 L21.5 8" fill="#9B7BE0"/>
+    <circle cx="19" cy="13" r="1" fill="#FF8A1F"/><circle cx="23" cy="13" r="1" fill="#FF8A1F"/>
+  </g></g>
 
   <!-- extras fuera del cuerpo -->
   <g class="v x-zzz" fill="none" stroke="#C7D0FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -248,7 +279,7 @@ const TEMPLATE = /* html */ `
 `;
 
 export class PilitaMascot extends HTMLElement {
-  static observedAttributes = ["state"];
+  static observedAttributes = ["state", "skin"];
 
   private svg!: SVGSVGElement;
   private reaction: PilitaReaction | null = null;
@@ -270,6 +301,15 @@ export class PilitaMascot extends HTMLElement {
 
   set state(value: PilitaState) {
     this.setAttribute("state", value);
+  }
+
+  get skin(): Skin {
+    const s = this.getAttribute("skin") as Skin;
+    return SKINS.includes(s) ? s : "classic";
+  }
+
+  set skin(value: Skin) {
+    this.setAttribute("skin", value);
   }
 
   connectedCallback(): void {
@@ -332,6 +372,7 @@ export class PilitaMascot extends HTMLElement {
     const p = this.pose(phase);
     const d = this.svg.dataset;
     d.state = this.state;
+    d.skin = this.skin;
     d.eyes = p.eyes;
     d.mouth = p.mouth;
     d.leds = p.leds;
