@@ -4,6 +4,7 @@ import { configure, play } from "../sound/sfx";
 import * as api from "./api";
 import { setLang, t, type Key } from "../i18n";
 import { resolveSkin, type SkinChoice } from "../mascot/skins";
+import { nextAction, type Action } from "./snowman";
 
 type Size = "hidden" | "pill" | "open";
 
@@ -102,7 +103,7 @@ export function mountIsland(root: HTMLElement): void {
   let openOnPending = true; // ajuste "Abrir la isla al llegar una solicitud"
   let skinChoice: SkinChoice = "auto"; // ajuste "Disfraz"; la skin efectiva depende de la fecha
 
-  // Adornos de la skin halloween (styles.css los muestra solo con ella): detrás del contenido y sin clics.
+  // Adornos de las skins halloween y christmas (styles.css muestra solo los de la activa): detrás del contenido y sin clics.
   root.innerHTML = `
     <div class="spooky" aria-hidden="true">
       <div class="bat-track"><svg class="bat" viewBox="1 2 40 18">
@@ -118,6 +119,45 @@ export function mountIsland(root: HTMLElement): void {
       </svg>
       <svg class="ghost" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
       <svg class="ghost g2" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
+    </div>
+    <div class="snowy" aria-hidden="true">
+      <i class="flake" style="left:4%;--s:3px;animation-duration:8s;animation-delay:-1s"></i>
+      <i class="flake" style="left:11%;--s:4px;animation-duration:11s;animation-delay:-4s"></i>
+      <i class="flake" style="left:18%;--s:5px;animation-duration:9s;animation-delay:-7s"></i>
+      <i class="flake" style="left:25%;--s:3px;animation-duration:13s;animation-delay:-10s"></i>
+      <i class="flake" style="left:32%;--s:4px;animation-duration:10s;animation-delay:-2s"></i>
+      <i class="flake" style="left:39%;--s:5px;animation-duration:12s;animation-delay:-5s"></i>
+      <i class="flake" style="left:46%;--s:3px;animation-duration:8s;animation-delay:-8s"></i>
+      <i class="flake" style="left:53%;--s:4px;animation-duration:14s;animation-delay:-11s"></i>
+      <i class="flake" style="left:60%;--s:5px;animation-duration:9s;animation-delay:-3s"></i>
+      <i class="flake" style="left:67%;--s:3px;animation-duration:11s;animation-delay:-6s"></i>
+      <i class="flake" style="left:74%;--s:4px;animation-duration:10s;animation-delay:-9s"></i>
+      <i class="flake" style="left:81%;--s:5px;animation-duration:13s;animation-delay:-12s"></i>
+      <i class="flake" style="left:88%;--s:3px;animation-duration:8s;animation-delay:-4.5s"></i>
+      <i class="flake" style="left:95%;--s:4px;animation-duration:12s;animation-delay:-7.5s"></i>
+      <div class="snow-track" data-act="idle"><svg class="snowman" viewBox="0 0 12 12">
+        <g class="sm-body">
+          <path class="leg" d="M5 9.8V12"/><path class="leg leg-b" d="M7 9.8V12"/>
+          <path class="arm" d="M3.6 6.6L1.4 5.6"/><path class="arm arm-r" d="M8.4 6.6L10.6 5.6"/>
+          <g class="sm-front">
+            <circle cx="6" cy="7.4" r="2.6" fill="#fff"/>
+            <circle cx="6" cy="2.6" r="2" fill="#fff"/>
+            <circle cx="5.3" cy="2.3" r=".4" fill="#000"/><circle cx="6.7" cy="2.3" r=".4" fill="#000"/>
+            <path d="M6.6 2.8L9 3.2L6.6 3.6Z" fill="#FF8A1F"/>
+            <path d="M3.4 4.7H8.6V5.7H3.4Z" fill="#D7263D"/>
+            <path d="M7.6 5.7H8.6L8.9 7.4H8.2Z" fill="#D7263D"/>
+          </g>
+          <g class="sm-back">
+            <circle cx="6" cy="7.4" r="2.6" fill="#fff"/>
+            <circle cx="6" cy="2.6" r="2" fill="#fff"/>
+            <path d="M3.4 4.7H8.6V5.7H3.4Z" fill="#D7263D"/>
+            <circle cx="5.1" cy="9.2" r="1.1" fill="#fff" stroke="#C9DAEA" stroke-width=".3"/>
+            <circle cx="6.9" cy="9.2" r="1.1" fill="#fff" stroke="#C9DAEA" stroke-width=".3"/>
+          </g>
+        </g>
+        <path class="dizzy" d="M-5 4.9L-4.5 6L-3.4 6.5L-4.5 7L-5 8.1L-5.5 7L-6.6 6.5L-5.5 6Z" fill="#FFD23F"/>
+        <circle class="ball" cx="10.6" cy="5.6" r=".9" fill="#fff"/>
+      </svg></div>
     </div>
     <div class="pill">
       <pilas-mascot state="dormida"></pilas-mascot>
@@ -399,6 +439,22 @@ export function mountIsland(root: HTMLElement): void {
     mascot.skin = skin;
     document.documentElement.dataset.skin = skin;
     configure({ skin });
+    clearTimeout(snowTimer);
+    if (skin === "christmas" && !matchMedia("(prefers-reduced-motion: reduce)").matches) snowStep();
+  }
+  // Muñeco de nieve: un único setTimeout encadenado; la pose la pinta el CSS según data-act y data-dir.
+  const snowTrack = root.querySelector(".snow-track") as HTMLElement;
+  let snowTimer = 0, snowX = Math.random(), snowAct: Action | undefined;
+  function snowStep(): void {
+    const { action, to, ms } = nextAction(Math.random, snowX, snowAct);
+    if (to !== snowX) snowTrack.dataset.dir = to < snowX ? "l" : "r";
+    snowTrack.dataset.act = action;
+    // Solo walk/run cambian left, así que la transición solo se nota al moverse.
+    snowTrack.style.transitionDuration = `${ms}ms`;
+    // Fracción del ancho libre (sin la pose), así la pose nunca se sale por ningún borde.
+    snowTrack.style.left = `calc(${to} * (100% - var(--sm)))`;
+    snowX = to; snowAct = action;
+    snowTimer = window.setTimeout(snowStep, ms);
   }
   // Ajustes: idioma, sonido, disfraz y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
   function applySettings(s: api.Settings): void {

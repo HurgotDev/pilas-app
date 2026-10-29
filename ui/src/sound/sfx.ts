@@ -27,6 +27,20 @@ const HALLOWEEN: Partial<Record<Sound, Note[]>> = {
   mareo:  [{ f: 2800, t: 0, d: 0.08, type: "triangle", to: 3400 }, { f: 2400, t: 0.09, d: 0.08, type: "triangle", to: 1900 }, { f: 2600, t: 0.18, d: 0.08, type: "triangle", to: 3100 }, { f: 2200, t: 0.27, d: 0.08, type: "triangle", to: 1700 }, { f: 2400, t: 0.36, d: 0.08, type: "triangle", to: 2800 }, { f: 2000, t: 0.45, d: 0.08, type: "triangle", to: 1600 }, { f: 2200, t: 0.54, d: 0.08, type: "triangle", to: 2500 }, { f: 1800, t: 0.63, d: 0.1, type: "triangle", to: 1400 }],
 };
 
+// Skin Christmas: cascabeles en los mismos cuatro; el resto cae a CLASSIC.
+const CHRISTMAS: Partial<Record<Sound, Note[]>> = {
+  // "jin-gle-bells": tres Mi agudos seguidos (0.27 s)
+  alerta: [{ f: 1319, t: 0, d: 0.07 }, { f: 1319, t: 0.09, d: 0.07 }, { f: 1319, t: 0.18, d: 0.09 }],
+  // remate del estribillo Mi-Sol-Do-Re-Mi (0.40 s)
+  listo:  [{ f: 1319, t: 0, d: 0.07 }, { f: 1568, t: 0.08, d: 0.07 }, { f: 1047, t: 0.16, d: 0.07 }, { f: 1175, t: 0.24, d: 0.07 }, { f: 1319, t: 0.32, d: 0.08 }],
+  // cascabel: dos golpes agudos (0.16 s)
+  toque:  [{ f: 1568, t: 0, d: 0.06, type: "triangle" }, { f: 2093, t: 0.07, d: 0.09, type: "triangle" }],
+  // trineo: cascabeles agudos que alternan y bajan (0.73 s)
+  mareo:  [{ f: 2637, t: 0, d: 0.08, type: "triangle" }, { f: 2093, t: 0.09, d: 0.08, type: "triangle" }, { f: 2349, t: 0.18, d: 0.08, type: "triangle" }, { f: 1976, t: 0.27, d: 0.08, type: "triangle" }, { f: 2093, t: 0.36, d: 0.08, type: "triangle" }, { f: 1760, t: 0.45, d: 0.08, type: "triangle" }, { f: 1976, t: 0.54, d: 0.08, type: "triangle" }, { f: 1568, t: 0.63, d: 0.1, type: "triangle" }],
+};
+
+const BY_SKIN: Record<Skin, Partial<Record<Sound, Note[]>>> = { classic: {}, halloween: HALLOWEEN, christmas: CHRISTMAS };
+
 let ctx: AudioContext | null = null;
 let volume = 0.5;
 let enabled = true;
@@ -42,7 +56,7 @@ export function play(name: Sound): void {
   if (!enabled || volume === 0) return;
   ctx ??= new AudioContext();
   const now = ctx.currentTime;
-  for (const n of (skin === "halloween" ? HALLOWEEN[name] : undefined) ?? CLASSIC[name]) {
+  for (const n of BY_SKIN[skin][name] ?? CLASSIC[name]) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = n.type ?? "square";

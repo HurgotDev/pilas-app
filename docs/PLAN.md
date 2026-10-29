@@ -117,3 +117,11 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     telaraña, fantasmitas y acentos naranja según `docs/SPEC.md` → Skins.
   - Verificar: render a tamaño real de píldora e isla abierta en ambas
     skins; `npm run typecheck`, `npm run build`.
+- [x] T7 · Disfraz de Navidad.
+  - Hecho: skin `christmas` (1–26 dic en Automático) en `settings.rs`,
+    `api.ts` y `skins.ts`; gorro de Papá Noel y LEDs rojo/verde en
+    `pilita.ts`; bolas en puntos y contador, nieve, resplandor cálido y
+    acentos rojo/verde en `styles.css`; cascabeles en `sfx.ts`; opción
+    "Christmas"/"Navidad" en Ajustes y en el playground.
+  - Verificar: `npm run test:ui` (bordes 30 nov/1 dic y 26/27 dic),
+    `cargo test -p pilas`; playground y app con la skin fijada.

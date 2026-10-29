@@ -12,6 +12,7 @@ use std::path::PathBuf;
 pub enum Skin {
     Classic,
     Halloween,
+    Christmas,
     #[default]
     #[serde(other)]
     Auto,
@@ -171,6 +172,7 @@ mod tests {
             (Skin::Auto, "auto"),
             (Skin::Classic, "classic"),
             (Skin::Halloween, "halloween"),
+            (Skin::Christmas, "christmas"),
         ] {
             assert_eq!(serde_json::to_value(skin).unwrap(), json!(text));
             assert_eq!(serde_json::from_value::<Skin>(json!(text)).unwrap(), skin);

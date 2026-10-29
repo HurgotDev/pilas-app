@@ -71,6 +71,93 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .ghost.g2 { left: auto; right: 22%; width: 9px; height: 10.5px; animation-duration: 14s; animation-delay: 8s; }
 @keyframes ghostrise { 0% { opacity: 0; transform: none; } 6% { opacity: .3; } 18%, 100% { opacity: 0; transform: translateY(-44px); } }
 @media (prefers-reduced-motion: reduce) { .bat-track, .ghost { display: none !important; } }
+/* Navidad: punto en silueta de bola (mismo truco y huella que la calabaza). */
+:root[data-skin="christmas"] .dot {
+  width: 10px; height: 10px; margin: -1px; border-radius: 0;
+  --bauble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect x='3.8' y='0' width='2.4' height='2.2' rx='.4'/%3E%3Ccircle cx='5' cy='6' r='4'/%3E%3C/svg%3E");
+  -webkit-mask-image: var(--bauble); mask-image: var(--bauble);
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+/* Navidad: contador en bola roja con enganche dorado; el padding superior deja el enganche libre. */
+:root[data-skin="christmas"] .badge {
+  height: 22px; min-width: 22px; padding: 3px 6px 0; box-sizing: border-box; border-radius: 0; color: #fff;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' preserveAspectRatio='none'%3E%3Crect x='8.5' y='.5' width='5' height='3.5' rx='1' fill='%23E8C15A'/%3E%3Cellipse cx='11' cy='13.2' rx='10.5' ry='8.6' fill='%23D7263D'/%3E%3Cellipse cx='7' cy='9.5' rx='2.6' ry='1.6' fill='%23fff' opacity='.35'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+/* Ambiente navideño: misma capa de fondo que .spooky; cada copo es un carril de alto completo que baja su propia altura. */
+.snowy { display: none; position: absolute; inset: 0; pointer-events: none; }
+:root[data-skin="christmas"] .snowy { display: block; }
+:root[data-skin="christmas"] .island:not([data-size="hidden"]) { box-shadow: inset 0 -8px 10px -8px rgba(215,38,61,.6); }
+/* Copos: left, --s (tamaño), duración y retraso van en línea; el retraso negativo ya los deja cayendo al cargar. */
+.flake { position: absolute; top: -4px; width: var(--s); height: 100%; opacity: 0;
+         background: radial-gradient(circle closest-side, rgba(255,255,255,.75) 55%, transparent) top / var(--s) var(--s) no-repeat;
+         animation: snowfall 9s linear infinite; }
+@keyframes snowfall { 0% { opacity: 0; transform: none; } 10%, 85% { opacity: .6; } 100% { opacity: 0; transform: translate(6px, 100%); } }
+/* Muñeco troll: island.ts mueve left (transición lineal) con calc() sobre el ancho libre (la pose mide --sm y no se sale); aquí solo las poses. El viewBox es de 12 unidades: 1 unidad = 1,5 px, así que los trazos y las distancias en unidades escalan solos. */
+.snow-track { --sm: 18px; position: absolute; bottom: 2px; left: 0; width: var(--sm); transition: left 0s linear; }
+.snowman { display: block; width: var(--sm); height: var(--sm); overflow: visible; }
+.snow-track[data-dir="l"] .snowman { transform: scaleX(-1); }
+.sm-body { transform-box: view-box; transform-origin: 6px 12px; }
+.leg { fill: none; stroke: #E6F0FA; stroke-width: 1; stroke-linecap: round; transform-box: fill-box; transform-origin: 50% 0; }
+.arm { fill: none; stroke: #8B5A2B; stroke-width: .6; stroke-linecap: round; transform-box: view-box; transform-origin: 3.6px 6.6px; }
+.arm-r { transform-origin: 8.4px 6.6px; }
+.sm-back, .ball, .dizzy { display: none; }
+/* walk: pasos lentos y bote suave; run: pasos rápidos, salto mayor e inclinado hacia delante. */
+[data-act="walk"] .leg { animation: snowstep .45s ease-in-out infinite alternate; }
+[data-act="walk"] .sm-body { animation: snowhop .45s ease-in-out infinite alternate; }
+[data-act="run"] .leg { animation: snowstep .28s ease-in-out infinite alternate; }
+[data-act="run"] .sm-body { animation: snowdash .28s ease-in-out infinite alternate; }
+[data-act="walk"] .leg-b, [data-act="run"] .leg-b { animation-direction: alternate-reverse; }
+/* idle: respira despacio. */
+[data-act="idle"] .sm-body { animation: snowbreathe 1.6s ease-in-out infinite alternate; }
+/* wave: brazo delantero en alto, agitándose. */
+[data-act="wave"] .arm-r { animation: snowwave .25s ease-in-out infinite alternate; }
+/* throw: carga el brazo, lanza, y la bola vuela en arco hacia donde mira y se deshace (1,2 s, igual que en snowman.ts). */
+[data-act="throw"] .arm-r { animation: snowthrow 1.2s ease-in-out both; }
+[data-act="throw"] .ball { display: inline; animation: snowball 1.2s linear both; }
+/* moon: de espaldas, meneando el trasero. */
+[data-act="moon"] .sm-front { display: none; }
+[data-act="moon"] .sm-back { display: inline; }
+[data-act="moon"] .sm-body { animation: snowwiggle .18s ease-in-out infinite alternate; }
+/* slip: patina con las patas hacia delante, cae de espaldas (las patas quedan al aire), rebota al chocar, se queda un rato y se levanta. 2 s, igual que en snowman.ts. */
+[data-act="slip"] .sm-body { animation: snowslip 2s ease-in-out both; }
+[data-act="slip"] .leg { animation: snowkick 2s ease-in-out both; }
+[data-act="slip"] .dizzy { display: inline; animation: snowdizzy 2s linear both; }
+@keyframes snowslip {
+  0%, 15% { transform: translate(0, 0) rotate(0deg); }
+  30% { transform: translate(0, 0) rotate(-25deg); }
+  45% { transform: translate(0, -2.5px) rotate(-90deg); }
+  50% { transform: translate(0, -4px) rotate(-90deg); }
+  55%, 70% { transform: translate(0, -2.5px) rotate(-90deg); }
+  90%, 100% { transform: translate(0, 0) rotate(0deg); }
+}
+@keyframes snowkick {
+  0%, 15%, 90%, 100% { transform: rotate(0deg); }
+  30%, 70% { transform: rotate(-60deg); }
+}
+@keyframes snowdizzy {
+  0%, 48%, 80%, 100% { opacity: 0; }
+  52%, 72% { opacity: 1; }
+}
+@keyframes snowstep { from { transform: rotate(-30deg); } to { transform: rotate(30deg); } }
+@keyframes snowhop { to { transform: translateY(-.6px); } }
+@keyframes snowdash { from { transform: rotate(8deg); } to { transform: translateY(-1.5px) rotate(8deg); } }
+@keyframes snowbreathe { to { transform: scale(1.03, 1.05); } }
+@keyframes snowwave { from { transform: rotate(-50deg); } to { transform: rotate(-85deg); } }
+@keyframes snowthrow { 0% { transform: none; } 40% { transform: rotate(-130deg); } 55% { transform: rotate(25deg); } 75%, 100% { transform: none; } }
+/* La bola recorre 34 unidades, unos 51 px en pantalla. */
+@keyframes snowball {
+  0%, 50% { opacity: 0; transform: none; }
+  55% { opacity: 1; transform: none; }
+  75% { transform: translate(18px, -8px); }
+  92% { opacity: 1; transform: translate(34px, 5px) scale(1); }
+  100% { opacity: 0; transform: translate(34px, 5px) scale(2, .5); }
+}
+@keyframes snowwiggle { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+@media (prefers-reduced-motion: reduce) { .flake, .snow-track { display: none !important; } }
+:root[data-skin="christmas"] { --line: #1f3a28; }
+:root[data-skin="christmas"] .link { color: #FF6B6B; }
+:root[data-skin="christmas"] :focus-visible { outline: 2px solid #4ADE80; outline-offset: 2px; }
 /* Acentos naranja; los colores de estado y Permitir/Denegar no cambian. */
 :root[data-skin="halloween"] { --line: #3a2410; }
 :root[data-skin="halloween"] .link { color: #FF8A1F; }

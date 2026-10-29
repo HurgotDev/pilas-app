@@ -4,7 +4,7 @@
  * Uso:
  *   <pilas-mascot state="cargando" style="height: 28px"></pilas-mascot>
  *   el.state = "alerta";            // dormida | cargando | alerta | llena
- *   el.skin = "halloween";          // classic (por defecto) | halloween
+ *   el.skin = "halloween";          // classic (por defecto) | halloween | christmas
  *   el.react("saludo");             // saludo | aplastada | mareo
  *   el.addEventListener("pilita-click", (e) => abrirTarjeta(e.detail.reaction));
  *       // detail.reaction: "mareo" | "aplastada" | null (null = ya estaba mareada)
@@ -40,7 +40,7 @@ const STATE_POSE: Record<PilitaState, Pose> = {
 
 const REACTION_MS: Record<PilitaReaction, number> = { saludo: 1100, aplastada: 900, mareo: 2000 };
 const STATES: PilitaState[] = ["dormida", "cargando", "alerta", "llena"];
-const SKINS: Skin[] = ["classic", "halloween"];
+const SKINS: Skin[] = ["classic", "halloween", "christmas"];
 
 const INK = "#1B1B2E";
 
@@ -66,6 +66,11 @@ const TEMPLATE = /* html */ `
   svg[data-skin="halloween"] { --led:#FF8A1F; }
   .skin-h { display: none; }
   svg[data-skin="halloween"] .skin-h { display: inline; }
+  /* Skin christmas: gorro de Papá Noel en el mismo hueco que el de bruja y LEDs alternos rojo/verde. */
+  .skin-c { display: none; }
+  svg[data-skin="christmas"] .skin-c { display: inline; }
+  svg[data-skin="christmas"] .lit-0, svg[data-skin="christmas"] .lit-2 { --led:#FF4D5E; }
+  svg[data-skin="christmas"] .lit-1, svg[data-skin="christmas"] .lit-3 { --led:#5CFF8A; }
 
   /* Variantes: solo se ve la que pide la pose */
   .v { display: none; }
@@ -243,6 +248,13 @@ const TEMPLATE = /* html */ `
       <ellipse cx="70" cy="30" rx="36" ry="8" fill="#2A1A4A"/>
       <path d="M48 29 L58 12 Q64 3 80 1 Q72 7 76 13 L92 29 Z" fill="#3B2566"/>
       <path d="M53.7 25 L56.6 20 L83 20 L88 25 Z" fill="#FF8A1F"/>
+    </g>
+    <!-- gorro de Papá Noel sobre el terminal (christmas); cabe en la caja del de bruja (y 1..38) -->
+    <g class="skin-c">
+      <path d="M50 28 Q52 6 74 4 Q92 3 100 18 L95 21 Q88 12 82 13 Q88 20 90 28 Z" fill="#D7263D"/>
+      <path d="M74 4 Q92 3 100 18 L97 19.5 Q90 9 76 8 Z" fill="#A81B30"/>
+      <rect x="46" y="24" width="48" height="12" rx="6" fill="#F4F4F8"/>
+      <circle cx="99" cy="19" r="5.5" fill="#F4F4F8"/>
     </g>
   </g>
 
