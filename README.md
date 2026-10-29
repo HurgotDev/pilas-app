@@ -6,6 +6,12 @@ switching windows.
 
 <p align="center"><img src="assets/icon.png" alt="Pilita, the Pilas mascot" width="160"></p>
 
+<p align="center">
+  <img src="assets/demo.gif" width="480"
+    alt="Pilas on the notch: the pilita alerts that Claude Code needs
+    permission and the request is approved with one click">
+</p>
+
 The latest version is on
 [GitHub Releases](https://github.com/HurgotDev/pilas-app/releases). The scope
 of v1 is in `docs/SPEC.md` and the progress in `docs/PLAN.md` (both in
