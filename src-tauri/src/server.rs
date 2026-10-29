@@ -55,6 +55,7 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
         && pilas_jump::is_focused(&pilas_jump::JumpTarget {
             term_program: msg.term_program.clone(),
             tty: msg.tty.clone(),
+            pid: msg.pid,
             ..Default::default()
         });
     let state = app.state::<AppState>();

@@ -114,7 +114,9 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
   la pilita alterna abrir/cerrar, como hasta ahora.
 - Pendiente nuevo: la isla se abre sola, suena la alerta, sin tomar el foco. Varios: FIFO con "1 de N".
 - Si la pestaña de Ghostty de esa sesión ya tiene el foco (Ghostty al frente
-  y su terminal enfocada con el mismo TTY), el pendiente entra en la cola en
+  y su terminal enfocada con el mismo TTY; en sesiones en segundo plano, con
+  el título `<glifo> <nombre>` igual al nombre que da `claude agents --json`
+  para su `pid`), el pendiente entra en la cola en
   silencio: sin abrir la isla, sin alerta ni recordatorio. Mientras haya
   pendientes en silencio se revisa el foco cada 1 s; al perderlo, se avisa
   como un pendiente nuevo. Otras terminales o cualquier fallo al comprobarlo:

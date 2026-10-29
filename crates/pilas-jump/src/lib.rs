@@ -7,6 +7,8 @@ use std::process::Command;
 pub struct JumpTarget {
     pub term_program: Option<String>,
     pub tty: Option<String>,
+    /// Proceso de la sesión; sirve para reconocer sesiones en segundo plano.
+    pub pid: Option<u32>,
     pub cwd: Option<String>,
     /// Id de terminal de Ghostty cacheado en un salto anterior.
     pub cached_terminal_id: Option<String>,
@@ -119,24 +121,90 @@ impl TerminalJumper for GhosttyJumper {
 /// ¿Tiene el foco la terminal de esta sesión? Solo Ghostty se puede comprobar;
 /// cualquier error cuenta como "no enfocada" para avisar al usuario.
 pub fn is_focused(target: &JumpTarget) -> bool {
-    if !GhosttyJumper.can_handle(target.term_program.as_deref()) {
-        return false;
-    }
-    let Some(tty) = target.tty.as_deref().filter(|t| !t.is_empty()) else {
+    let Ok(out) = osascript(focused_script()) else {
         return false;
     };
-    osascript(focused_tty_script()).is_ok_and(|focused| tty_matches(&focused, Some(tty)))
+    // Solo se lanza `claude` si Ghostty está al frente y el tty no bastó.
+    is_focused_with(&out, target, agents_json)
 }
 
-/// Script que devuelve el tty de la terminal enfocada de Ghostty, o "" si
-/// Ghostty no corre o no está al frente. Nunca lanza Ghostty.
-fn focused_tty_script() -> &'static str {
+/// Decisión pura: `out` es la salida del script de foco y `agents` da el JSON de
+/// `claude agents --json` (solo se llama si hace falta).
+fn is_focused_with(out: &str, target: &JumpTarget, agents: impl FnOnce() -> Option<String>) -> bool {
+    let Some((tty, title)) = parse_focus(out) else {
+        return false;
+    };
+    if tty_matches(tty, target.tty.as_deref()) {
+        return true;
+    }
+    let (Some(pid), false) = (target.pid, title.is_empty()) else {
+        return false;
+    };
+    agents()
+        .and_then(|json| unique_name_for_pid(&json, pid))
+        .is_some_and(|name| name == strip_glyph(title))
+}
+
+/// Script que devuelve "tty\ntítulo" de la terminal enfocada de Ghostty, o ""
+/// si Ghostty no corre o no está al frente. Nunca lanza Ghostty.
+fn focused_script() -> &'static str {
     "if application \"Ghostty\" is running then\n\
        tell application \"Ghostty\"\n\
-         if frontmost then return (tty of focused terminal of selected tab of front window) as text\n\
+         if frontmost then\n\
+           set t to focused terminal of selected tab of front window\n\
+           return (tty of t) & linefeed & (name of t)\n\
+         end if\n\
        end tell\n\
      end if\n\
      return \"\""
+}
+
+/// Separa la salida del script en (tty, título); None si está vacía.
+fn parse_focus(out: &str) -> Option<(&str, &str)> {
+    let out = out.trim_end_matches(['\n', '\r']);
+    if out.is_empty() {
+        return None;
+    }
+    Some(out.split_once('\n').unwrap_or((out, "")))
+}
+
+/// Quita el glifo de estado inicial ("◐ Nombre" → "Nombre"); si el título no
+/// tiene esa forma, lo devuelve entero.
+fn strip_glyph(title: &str) -> &str {
+    let mut chars = title.chars();
+    match (chars.next(), chars.next()) {
+        (Some(g), Some(' ')) if !g.is_alphanumeric() => chars.as_str(),
+        _ => title,
+    }
+}
+
+/// Nombre de la sesión con ese pid, solo si ninguna otra comparte nombre.
+fn unique_name_for_pid(json: &str, pid: u32) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    let entries = v.as_array()?;
+    let name_of = |e: &serde_json::Value| e.get("name")?.as_str().map(str::to_owned);
+    let mine = entries
+        .iter()
+        .find(|e| e.get("pid").and_then(|p| p.as_u64()) == Some(u64::from(pid)))?;
+    let name = name_of(mine).filter(|n| !n.is_empty())?;
+    let same = entries.iter().filter(|e| name_of(e).as_deref() == Some(&name));
+    (same.count() == 1).then_some(name)
+}
+
+/// Salida de `claude agents --json` (sin red, ~0.1 s); None ante cualquier fallo.
+fn agents_json() -> Option<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let bin = [
+        format!("{home}/.local/bin/claude"),
+        "/opt/homebrew/bin/claude".into(),
+        "/usr/local/bin/claude".into(),
+    ]
+    .into_iter()
+    .find(|p| std::path::Path::new(p).exists())?;
+    let out = Command::new(bin).args(["agents", "--json"]).output().ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
 /// La sesión tiene el foco solo si el tty coincide exactamente.
@@ -196,7 +264,7 @@ mod tests {
 
     #[test]
     fn script_foco_comprueba_que_ghostty_corre_antes_de_tell() {
-        let s = focused_tty_script();
+        let s = focused_script();
         let guard = s.find("is running").expect("falta el guard `is running`");
         let tell = s.find("tell application").expect("falta el `tell`");
         assert!(guard < tell, "el guard debe ir antes del `tell`");
@@ -204,9 +272,10 @@ mod tests {
 
     #[test]
     fn script_foco_exige_frontmost_y_terminal_enfocada() {
-        let s = focused_tty_script();
+        let s = focused_script();
         assert!(s.contains("frontmost"));
         assert!(s.contains("focused terminal of selected tab of front window"));
+        assert!(s.contains("tty of t") && s.contains("name of t"));
     }
 
     #[test]
@@ -219,19 +288,78 @@ mod tests {
     }
 
     #[test]
-    fn sin_foco_si_no_es_ghostty_o_no_hay_tty() {
-        let iterm = JumpTarget {
-            term_program: Some("iterm.app".into()),
-            tty: Some("/dev/ttys007".into()),
+    fn parsea_la_salida_del_foco() {
+        assert_eq!(parse_focus(""), None);
+        assert_eq!(
+            parse_focus("/dev/ttys000\n◐ Fix open pill\n"),
+            Some(("/dev/ttys000", "◐ Fix open pill"))
+        );
+        assert_eq!(parse_focus("/dev/ttys000"), Some(("/dev/ttys000", "")));
+    }
+
+    #[test]
+    fn quita_el_glifo_del_titulo() {
+        assert_eq!(strip_glyph("◐ Fix open pill"), "Fix open pill");
+        assert_eq!(strip_glyph("plain"), "plain");
+        assert_eq!(strip_glyph("a b"), "a b");
+        assert_eq!(strip_glyph("◐"), "◐");
+        assert_eq!(strip_glyph("◐ "), "");
+    }
+
+    const AGENTS: &str = r#"[{"id":"a","name":"Phase 5","state":"blocked"},
+        {"pid":69647,"id":"b","name":"Fix open pill","state":"working"},
+        {"pid":7,"id":"c","name":"Dup"},{"pid":8,"id":"d","name":"Dup"},
+        {"pid":9,"id":"e"}]"#;
+
+    #[test]
+    fn nombre_unico_por_pid() {
+        let n = |pid| unique_name_for_pid(AGENTS, pid);
+        assert_eq!(n(69647).as_deref(), Some("Fix open pill"));
+        assert_eq!(n(7), None); // nombre duplicado
+        assert_eq!(n(9), None); // sin nombre
+        assert_eq!(n(1), None); // pid ausente
+        assert_eq!(unique_name_for_pid("no json", 7), None);
+    }
+
+    fn target(tty: Option<&str>, pid: Option<u32>) -> JumpTarget {
+        JumpTarget {
+            tty: tty.map(Into::into),
+            pid,
             ..Default::default()
-        };
-        assert!(!is_focused(&iterm));
-        let sin_tty = JumpTarget {
-            term_program: Some("ghostty".into()),
-            tty: None,
-            ..Default::default()
-        };
-        assert!(!is_focused(&sin_tty));
+        }
+    }
+
+    #[test]
+    fn decide_foco_por_tty_sin_lanzar_claude() {
+        let t = target(Some("/dev/ttys000"), Some(69647));
+        assert!(is_focused_with("/dev/ttys000\nx", &t, || panic!("no debe lanzarse")));
+    }
+
+    #[test]
+    fn decide_foco_de_segundo_plano_por_nombre() {
+        let t = target(Some("/dev/ttys099"), Some(69647));
+        let agents = || Some(AGENTS.to_string());
+        assert!(is_focused_with("/dev/ttys000\n◐ Fix open pill", &t, agents));
+        assert!(!is_focused_with("/dev/ttys000\n◐ Phase 5", &t, agents));
+        assert!(!is_focused_with("/dev/ttys000\n", &t, agents));
+        assert!(!is_focused_with("/dev/ttys000\n◐ Fix open pill", &t, || None));
+    }
+
+    #[test]
+    fn decide_sin_foco_si_no_hay_nada_que_comparar() {
+        let vacio = JumpTarget::default();
+        assert!(!is_focused_with("", &target(Some("/dev/ttys000"), None), || None));
+        assert!(!is_focused_with("/dev/ttys000\nx", &vacio, || None));
+        assert!(!is_focused_with("/dev/ttys000\nx", &target(Some(""), None), || None));
+    }
+
+    /// Humo manual: `cargo test -p pilas-jump -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn humo_claude_agents_real() {
+        let json = agents_json().expect("claude agents --json falló");
+        println!("{json}");
+        assert!(serde_json::from_str::<serde_json::Value>(&json).is_ok());
     }
 
     #[test]
