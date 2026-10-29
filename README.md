@@ -59,7 +59,8 @@ are two ways to allow it:
   first attempt. In recent versions of macOS, right-click → Open no longer
   bypasses this block.
 
-On first launch, the onboarding opens and installs the hooks in Claude Code.
+On first launch, the onboarding opens, installs the hooks in Claude Code and
+lets you choose whether Pilas launches at login.
 After that, the pilita icon in the menu bar gives you access to **Settings…**.
 
 Pilas checks for updates at startup and every 24 hours, and tells you in the

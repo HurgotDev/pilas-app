@@ -159,12 +159,16 @@ function connectBody(): string {
     <div class="btns"><button class="primary" data-apply ${diff && !busy ? "" : "disabled"}>${t("hooks.connect")}</button></div>`;
 }
 
+const check = (key: BoolKey, label: Key) =>
+  `<label class="row"><span>${t(label)}</span><input type="checkbox" data-bool="${key}" ${settings[key] ? "checked" : ""}></label>`;
+
 const STEP_BODY: (() => string)[] = [
   () => `<pilas-mascot class="hero" state="cargando"></pilas-mascot>
     <h1>${t("onb.welcome.title")}</h1><p>${t("onb.welcome.body")}</p>`,
   connectBody,
   () => `<h1>${t("onb.automation.title")}</h1><p>${t("onb.automation.body")}</p>`,
-  () => `<h1>${t("onb.restart.title")}</h1><p>${t("onb.restart.body")}</p>`,
+  () => `<h1>${t("onb.restart.title")}</h1><p>${t("onb.restart.body")}</p>
+    ${check("launch_at_login", "set.launch_at_login")}`,
 ];
 
 function onboardingView(): string {
@@ -204,8 +208,6 @@ function settingsView(): string {
     ["es", t("set.lang.es")],
   ];
   const langCurrent = settings.lang ?? "system";
-  const check = (key: BoolKey, label: Key) =>
-    `<label class="row"><span>${t(label)}</span><input type="checkbox" data-bool="${key}" ${settings[key] ? "checked" : ""}></label>`;
   const vol = Math.round(settings.volume * 100);
   const preview = diff
     ? `<div class="diff">${diffHtml(diff.lines)}</div>
