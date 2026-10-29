@@ -5,7 +5,8 @@
  *   <pilas-mascot state="cargando" style="height: 28px"></pilas-mascot>
  *   el.state = "alerta";            // dormida | cargando | alerta | llena
  *   el.react("saludo");             // saludo | aplastada | mareo
- *   el.addEventListener("pilita-click", () => abrirTarjeta());
+ *   el.addEventListener("pilita-click", (e) => abrirTarjeta(e.detail.reaction));
+ *       // detail.reaction: "mareo" | "aplastada" | null (null = ya estaba mareada)
  *
  * Interacción incluida: hover → saludo, clic → aplastada, 3 clics en < 1 s → mareo.
  * En "alerta" no hay reacciones: el clic solo emite "pilita-click".
@@ -347,15 +348,19 @@ export class PilitaMascot extends HTMLElement {
   };
 
   private onClick = (): void => {
-    this.dispatchEvent(new CustomEvent("pilita-click", { bubbles: true, composed: true }));
     const now = performance.now();
-    this.clicks = [...this.clicks.filter((t) => now - t < 1000), now];
+    // Durante el mareo los clics no cuentan para uno nuevo.
+    if (this.reaction !== "mareo") this.clicks = [...this.clicks.filter((t) => now - t < 1000), now];
+    let reaction: PilitaReaction | null = null;
     if (this.clicks.length >= 3) {
       this.clicks = [];
       this.react("mareo");
+      reaction = "mareo";
     } else if (this.reaction !== "mareo") {
       this.react("aplastada");
+      reaction = "aplastada";
     }
+    this.dispatchEvent(new CustomEvent("pilita-click", { bubbles: true, composed: true, detail: { reaction } }));
   };
 
   private scheduleBlink = (): void => {
