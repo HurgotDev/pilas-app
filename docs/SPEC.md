@@ -105,8 +105,13 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
 | --- | --- | --- |
 | Oculta | Sin sesiones | Área de hover de 6 px en el borde superior |
 | Píldora | Hay sesiones | Pilita a la izquierda, contador de pendientes a la derecha; 32 px de alto |
-| Abierta | Clic en la píldora (no en la pilita, salvo en Alerta) o llega un pendiente | Lista de sesiones o tarjeta; 420 × hasta 360 px |
+| Abierta | Clic en la píldora o la pilita, o llega un pendiente | Lista de sesiones o tarjeta; 420 × hasta 360 px |
 
+- Clic en la píldora contraída (también sobre la pilita, en cualquier estado)
+  la abre; sobre la pilita, además, hace su reacción y su sonido de toque
+  (salvo en Alerta). Con la isla abierta, el clic en la pilita no la cierra:
+  solo reacciona (aplastada, mareo con 3 clics). Clic en la píldora fuera de
+  la pilita alterna abrir/cerrar, como hasta ahora.
 - Pendiente nuevo: la isla se abre sola, suena la alerta, sin tomar el foco. Varios: FIFO con "1 de N".
 - Clic fuera o `Esc` contrae a píldora; el pendiente sigue en cola.
 - Lista: pendientes arriba, luego por actividad. Fila: punto de estado, proyecto, última acción, tiempo. Clic salta a la terminal.
