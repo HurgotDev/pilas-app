@@ -304,7 +304,8 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
 fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window("settings") {
         window.show()?;
-        return window.set_focus();
+        panel::bring_to_front(app, "settings");
+        return Ok(());
     }
     WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Pilas")
@@ -312,6 +313,7 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
         .resizable(false)
         .center()
         .build()?;
+    panel::bring_to_front(app, "settings");
     Ok(())
 }
 

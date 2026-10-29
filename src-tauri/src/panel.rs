@@ -104,8 +104,8 @@ mod imp {
     use objc2::runtime::{AnyObject, NSObject};
     use objc2::{define_class, ffi, msg_send, AnyThread, ClassType, DefinedClass, MainThreadMarker};
     use objc2_app_kit::{
-        NSApplicationDidChangeScreenParametersNotification, NSEvent, NSMainMenuWindowLevel, NSPanel, NSScreen,
-        NSTrackingArea, NSTrackingAreaOptions, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+        NSApplication, NSApplicationDidChangeScreenParametersNotification, NSEvent, NSMainMenuWindowLevel, NSPanel,
+        NSScreen, NSTrackingArea, NSTrackingAreaOptions, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
     };
     use objc2_foundation::{NSNotification, NSNotificationCenter, NSPoint, NSRect, NSSize};
     use std::ptr::NonNull;
@@ -249,6 +249,24 @@ mod imp {
         });
     }
 
+    /// Activa la app y trae al frente la ventana `label`. En la cola del hilo principal, para
+    /// que corra después del `show`/`build` pendiente (la isla no usa esto: nunca roba foco).
+    pub fn bring_to_front(app: &AppHandle, label: &'static str) {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let (Some(mtm), Some(window)) = (MainThreadMarker::new(), handle.get_webview_window(label)) else {
+                return;
+            };
+            let Ok(ptr) = window.ns_window() else { return };
+            // `activate()` exige macOS 14+ y el mínimo es 13.
+            #[allow(deprecated)]
+            NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+            // SAFETY: `ptr` es el NSWindow de `label` y estamos en el hilo principal.
+            let w: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+            w.makeKeyAndOrderFront(None);
+        });
+    }
+
     /// Nombres de las pantallas (`localizedName`), en el orden de `NSScreen.screens`.
     /// Pide el dato al hilo principal; no llamar desde él (bloquearía).
     pub fn screen_names(app: &AppHandle) -> Vec<String> {
@@ -290,6 +308,8 @@ mod imp {
 
     pub fn place(_app: &AppHandle, _screen: ScreenChoice, _mode: IslandMode, _open_height: Option<f64>) {}
 
+    pub fn bring_to_front(_app: &AppHandle, _label: &'static str) {}
+
     pub fn watch_screens(_on_change: impl Fn() + 'static) {}
 
     pub fn screen_names(_app: &AppHandle) -> Vec<String> {
@@ -297,7 +317,7 @@ mod imp {
     }
 }
 
-pub use imp::{make_panel, place, screen_names, watch_screens};
+pub use imp::{bring_to_front, make_panel, place, screen_names, watch_screens};
 
 #[cfg(test)]
 mod tests {
