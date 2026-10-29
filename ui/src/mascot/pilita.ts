@@ -61,16 +61,11 @@ const TEMPLATE = /* html */ `
   .c-foot  { fill: var(--foot);  transition: fill .4s ease; }
   .s-body  { stroke: var(--body); transition: stroke .4s ease; }
 
-  /* Skin halloween: solo cambia el LED y añade sombrero y murciélago; el color del cuerpo sigue diciendo el estado.
+  /* Skin halloween: solo cambia el LED y añade sombrero (el murciélago vuela en la isla); el color del cuerpo sigue diciendo el estado.
      Todo queda dentro del viewBox (y >= 0) para que la skin clásica y el recorte de la píldora no cambien. */
   svg[data-skin="halloween"] { --led:#FF8A1F; }
   .skin-h { display: none; }
   svg[data-skin="halloween"] .skin-h { display: inline; }
-  .bat { animation: batfloat 2.6s ease-in-out infinite; }
-  .wing { transform-box: fill-box; animation: batflap .5s ease-in-out infinite alternate; }
-  .wing-l { transform-origin: 100% 50%; } .wing-r { transform-origin: 0 50%; }
-  @keyframes batfloat { 50% { transform: translate(2px, -3px); } }
-  @keyframes batflap  { to { transform: scaleY(.45); } }
 
   /* Variantes: solo se ve la que pide la pose */
   .v { display: none; }
@@ -250,15 +245,6 @@ const TEMPLATE = /* html */ `
       <path d="M53.7 25 L56.6 20 L83 20 L88 25 Z" fill="#FF8A1F"/>
     </g>
   </g>
-
-  <!-- murciélago (halloween), arriba a la izquierda; libre de zzz, "!" y destellos -->
-  <g class="skin-h"><g class="bat">
-    <path class="wing wing-l" d="M16 12 Q9 3 2 8 Q5 11 5 16 Q9 13 11 18 Q14 17 16 19 Z" fill="#9B7BE0"/>
-    <path class="wing wing-r" d="M26 12 Q33 3 40 8 Q37 11 37 16 Q33 13 31 18 Q28 17 26 19 Z" fill="#9B7BE0"/>
-    <ellipse cx="21" cy="15" rx="5" ry="7" fill="#9B7BE0"/>
-    <path d="M17.5 9 L18 3 L20.5 8 M24.5 9 L24 3 L21.5 8" fill="#9B7BE0"/>
-    <circle cx="19" cy="13" r="1" fill="#FF8A1F"/><circle cx="23" cy="13" r="1" fill="#FF8A1F"/>
-  </g></g>
 
   <!-- extras fuera del cuerpo -->
   <g class="v x-zzz" fill="none" stroke="#C7D0FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
