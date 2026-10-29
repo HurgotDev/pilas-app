@@ -4,7 +4,8 @@
 
 ## Checklist
 
-- [ ] Fragment in `.changes/` (except release or back-merge PRs).
+- [ ] Changelog fragment in `.changes/`, body in English (not needed in
+      release, hotfix or back-merge PRs).
 - [ ] `README.md` updated, or not applicable: the change does not alter what
       users install, configure, see or use, nor the development commands.
 - [ ] Affected docs are current (`docs/SPEC.md`, `docs/PLAN.md`,

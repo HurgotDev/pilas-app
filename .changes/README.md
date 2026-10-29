@@ -1,21 +1,22 @@
-# Fragmentos de changelog
+# Changelog fragments
 
-Cada cambio que va a `develop` añade aquí un archivo `<slug>.md` (por
-ejemplo `instalador-hooks.md`). Al preparar un release,
-`npm run release:prepare` los junta en `CHANGELOG.md`, calcula la versión y
-los borra.
+Every change merged into `develop` adds one file here, named `<slug>.md` (for
+example `hook-installer.md`). When a release is prepared,
+`npm run release:prepare` gathers them into `CHANGELOG.md`, computes the
+version and deletes them.
 
-Formato:
+Format:
 
 ```
 ---
 bump: minor   # patch | minor | major
 ---
-Añade el instalador de hooks con backup y diff.
+Add the hook installer with backup and diff.
 ```
 
-- `bump`: `patch` para correcciones, `minor` para novedades, `major` para
-  cambios incompatibles. Gana el más alto de todos los fragmentos.
-- Cuerpo: una frase en español, en imperativo. Será una viñeta del changelog.
+- `bump`: `patch` for fixes, `minor` for new features, `major` for breaking
+  changes. The highest bump across all fragments wins.
+- Body: one sentence in English, in the imperative. It becomes a bullet in the
+  changelog.
 
-Este README lo ignora la herramienta. Más detalle en `docs/RELEASING.md`.
+The tool ignores this README. More detail in `docs/RELEASING.md`.
