@@ -29,7 +29,7 @@ Un agente (Claude Code), una plataforma validada (macOS) y una terminal con salt
 | Instalador de hooks con backup y diff | |
 | Ajustes mínimos | Pantalla, sonido, idioma, inicio con el sistema |
 | Idiomas | Inglés (por defecto) y español |
-| Skins de temporada | Clásica y Halloween; automática por fecha |
+| Skins de temporada | Clásica, Halloween y Navidad; automática por fecha |
 
 Fuera de alcance: otros agentes, chat con IA, integraciones, diffs en vivo, uso del plan, app móvil, atajos
 globales, skins hechas por el usuario, notificaciones del sistema, firma/notarización, builds oficiales de Windows y Linux.
@@ -168,7 +168,8 @@ Ajustes: activado + volumen (50 % por defecto). Nunca en bucle.
 Disfraces de temporada para la pilita. Solo cambian lo visual y el sonido:
 estados, prioridad, reacciones, tiempos y lógica siguen idénticos. Todo vive
 en código (SVG, CSS y notas de Web Audio): sin archivos externos, sin red y
-sin dependencias nuevas. v1: `classic` (la de siempre) y `halloween`.
+sin dependencias nuevas. `classic` (la de siempre), `halloween` y
+`christmas`.
 
 **Regla de oro: el color del cuerpo sigue contando el estado.** Una skin
 añade accesorios y retoca detalles, pero nunca cambia `--body`, `--shade`,
@@ -176,14 +177,16 @@ añade accesorios y retoca detalles, pero nunca cambia `--body`, `--shade`,
 
 ### Activación
 
-Ajuste "Costume" / "Disfraz" con tres opciones:
+Ajuste "Costume" / "Disfraz" con cuatro opciones:
 
 - Automático (por defecto): `halloween` del 15 de octubre al 2 de noviembre,
-  ambos incluidos, con la fecha local; `classic` el resto del año.
+  ambos incluidos, y `christmas` del 1 al 26 de diciembre, ambos incluidos,
+  con la fecha local; `classic` el resto del año.
 - Clásico: siempre `classic`.
 - Halloween: siempre `halloween`.
+- Navidad ("Christmas"): siempre `christmas`.
 
-En `settings.json` es `skin: "auto" | "classic" | "halloween"`. Un valor
+En `settings.json` es `skin: "auto" | "classic" | "halloween" | "christmas"`. Un valor
 desconocido (por ejemplo, de una versión más nueva) se lee como `"auto"` sin
 perder el resto de los ajustes. La skin efectiva la resuelve una función pura
 `resolveSkin(choice, date)` en `ui/src/mascot/skins.ts`. Se recalcula al
@@ -222,6 +225,27 @@ pilita vuelve sola a la clásica sin reiniciar la app.
   Denegado) usa los clásicos. Siguen respetando "activado" y el volumen, y
   nunca suenan en bucle.
 
+### Navidad
+
+- **Pilita**: `<pilas-mascot skin="christmas">`. Gorro de Papá Noel sobre el
+  borne, dentro del `rig` (respira, flota, se aplasta y se marea con ella).
+  Los LEDs encendidos pasan a luces navideñas alternas rojo/verde. Se ve
+  entero en la píldora de 28 px sin recortarse.
+- **Punto de estado**: silueta de bola de Navidad pintada con el color de
+  estado de hoy; misma alineación y área de clic.
+- **Contador de pendientes**: bola roja con el número encima. Con 0 no se ve.
+- **Ambiente de la isla**, detrás del contenido y sin clics, sin tapar texto
+  ni botones:
+  - Unos pocos copos de nieve que caen despacio.
+  - Resplandor cálido tenue en el borde inferior.
+  - Acentos rojo/verde: separadores, enlaces y anillo de foco.
+  - No cambian: los colores de estado ni Permitir/Denegar.
+  - Con `prefers-reduced-motion` no cae nieve.
+  - Solo CSS (y SVG en línea).
+- **Sonidos**: variantes de cascabeles de Alerta, Listo, Toque y Mareo, misma
+  forma de onda 8-bit, duración parecida (±20 %) y mismo volumen. El resto
+  usa los clásicos. Nunca en bucle.
+
 ### Implementación
 
 - `src-tauri/src/settings.rs`: enum `Skin` (`auto` por defecto, valor
@@ -233,7 +257,7 @@ pilita vuelve sola a la clásica sin reiniciar la app.
 - `ui/src/sound/sfx.ts`: `configure({ skin })` y tabla de notas por skin con
   respaldo en la clásica.
 - `ui/src/styles.css`: `.dot` con forma de calabaza bajo
-  `[data-skin="halloween"]`.
+  `[data-skin="halloween"]` y de bola bajo `[data-skin="christmas"]`.
 - `ui/src/settings.ts` + `ui/src/i18n.ts`: selector en Ajustes (en/es).
 - `/playground.html`: selector de skin para revisar todos los estados y
   reacciones con cada disfraz.
@@ -244,11 +268,13 @@ pilita vuelve sola a la clásica sin reiniciar la app.
 
 - Rust (`cargo test -p pilas`): `skin` falta →
   `auto`; valor desconocido → `auto` sin perder `volume` ni `lang`; ida y
-  vuelta de `classic`/`halloween`.
+  vuelta de `classic`/`halloween`/`christmas`.
 - TS (`npm run test:ui`, nuevo script =
   `node --test ui/src/mascot/skins.test.ts`; Node ≥ 22.18 quita los tipos
   solo, sin dependencias nuevas): `resolveSkin` en 14 oct → `classic`,
-  15 oct y 2 nov → `halloween`, 3 nov → `classic`; `classic`/`halloween` ignoran la fecha.
+  15 oct y 2 nov → `halloween`, 3 nov → `classic`; 30 nov → `classic`,
+  1 dic y 26 dic → `christmas`, 27 dic → `classic`; las opciones fijas
+  ignoran la fecha.
 - A mano en el playground y en la app: los 4 estados y las 3 reacciones con
   cada skin, en la píldora y en la isla abierta, con y sin reduced-motion.
 
@@ -286,7 +312,7 @@ ofrece reparar al iniciar, desinstala solo lo suyo.
 | Abrir isla al llegar un pendiente | Sí / No | Sí |
 | Iniciar con el sistema | Sí / No | Sí |
 | Buscar actualizaciones | Sí / No | Sí |
-| Disfraz | Automático / Clásico / Halloween | Automático |
+| Disfraz | Automático / Clásico / Halloween / Navidad | Automático |
 
 Actualizaciones: con el ajuste activado, la app consulta
 `https://github.com/HurgotDev/pilas-app/releases/latest/download/latest.json`
@@ -319,7 +345,8 @@ siguen mandando · sin privilegios · el instalador siempre muestra diff y hace 
 - El instalador hace backup, muestra diff, conserva hooks ajenos y desinstala solo los suyos.
 - La isla nunca roba el foco mientras escribes en otra app.
 - Con el disfraz en Automático, la pilita lleva el de Halloween del 15 oct al
-  2 nov y vuelve a la clásica sola; Clásico y Halloween lo fijan. En los 4
+  2 nov y el de Navidad del 1 al 26 dic, y vuelve a la clásica sola;
+  Clásico, Halloween y Navidad lo fijan. En los 4
   estados el color del cuerpo es el de siempre y el sombrero no se recorta en
   la píldora.
 

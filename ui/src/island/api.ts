@@ -67,7 +67,7 @@ export interface Settings {
   onboarded: boolean;
   check_updates: boolean;
   /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/mascot/skins.ts`). */
-  skin: "auto" | "classic" | "halloween";
+  skin: "auto" | "classic" | "halloween" | "christmas";
 }
 
 export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";

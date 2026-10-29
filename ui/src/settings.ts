@@ -216,6 +216,7 @@ function settingsView(): string {
     ["auto", "set.skin.auto"],
     ["classic", "set.skin.classic"],
     ["halloween", "set.skin.halloween"],
+    ["christmas", "set.skin.christmas"],
   ];
   const vol = Math.round(settings.volume * 100);
   const preview = diff

@@ -102,7 +102,7 @@ export function mountIsland(root: HTMLElement): void {
   let openOnPending = true; // ajuste "Abrir la isla al llegar una solicitud"
   let skinChoice: SkinChoice = "auto"; // ajuste "Disfraz"; la skin efectiva depende de la fecha
 
-  // Adornos de la skin halloween (styles.css los muestra solo con ella): detrás del contenido y sin clics.
+  // Adornos de las skins halloween y christmas (styles.css muestra solo los de la activa): detrás del contenido y sin clics.
   root.innerHTML = `
     <div class="spooky" aria-hidden="true">
       <div class="bat-track"><svg class="bat" viewBox="1 2 40 18">
@@ -119,6 +119,7 @@ export function mountIsland(root: HTMLElement): void {
       <svg class="ghost" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
       <svg class="ghost g2" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
     </div>
+    <div class="snowy" aria-hidden="true"><i class="flake"></i><i class="flake"></i><i class="flake"></i><i class="flake"></i><i class="flake"></i></div>
     <div class="pill">
       <pilas-mascot state="dormida"></pilas-mascot>
       <span class="badge" hidden></span>

@@ -71,6 +71,35 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .ghost.g2 { left: auto; right: 22%; width: 9px; height: 10.5px; animation-duration: 14s; animation-delay: 8s; }
 @keyframes ghostrise { 0% { opacity: 0; transform: none; } 6% { opacity: .3; } 18%, 100% { opacity: 0; transform: translateY(-44px); } }
 @media (prefers-reduced-motion: reduce) { .bat-track, .ghost { display: none !important; } }
+/* Navidad: punto en silueta de bola (mismo truco y huella que la calabaza). */
+:root[data-skin="christmas"] .dot {
+  width: 10px; height: 10px; margin: -1px; border-radius: 0;
+  --bauble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect x='3.8' y='0' width='2.4' height='2.2' rx='.4'/%3E%3Ccircle cx='5' cy='6' r='4'/%3E%3C/svg%3E");
+  -webkit-mask-image: var(--bauble); mask-image: var(--bauble);
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+/* Navidad: contador en bola roja con enganche dorado; el padding superior deja el enganche libre. */
+:root[data-skin="christmas"] .badge {
+  height: 22px; min-width: 22px; padding: 3px 6px 0; box-sizing: border-box; border-radius: 0; color: #fff;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' preserveAspectRatio='none'%3E%3Crect x='8.5' y='.5' width='5' height='3.5' rx='1' fill='%23E8C15A'/%3E%3Cellipse cx='11' cy='13.2' rx='10.5' ry='8.6' fill='%23D7263D'/%3E%3Cellipse cx='7' cy='9.5' rx='2.6' ry='1.6' fill='%23fff' opacity='.35'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+/* Ambiente navideño: misma capa de fondo que .spooky; cada copo es un carril de alto completo que baja su propia altura. */
+.snowy { display: none; position: absolute; inset: 0; pointer-events: none; }
+:root[data-skin="christmas"] .snowy { display: block; }
+:root[data-skin="christmas"] .island:not([data-size="hidden"]) { box-shadow: inset 0 -8px 10px -8px rgba(255,196,120,.4); }
+.flake { position: absolute; top: -4px; left: 12%; width: 4px; height: 100%; opacity: 0;
+         background: radial-gradient(circle, rgba(255,255,255,.75) 1.4px, transparent 2px) top / 4px 4px no-repeat;
+         animation: snowfall 9s linear infinite; }
+.flake:nth-child(2) { left: 31%; animation-duration: 12s; animation-delay: 3s; }
+.flake:nth-child(3) { left: 52%; animation-duration: 10s; animation-delay: 6s; }
+.flake:nth-child(4) { left: 71%; animation-duration: 13s; animation-delay: 1.5s; }
+.flake:nth-child(5) { left: 88%; animation-duration: 11s; animation-delay: 4.5s; }
+@keyframes snowfall { 0% { opacity: 0; transform: none; } 10%, 85% { opacity: .6; } 100% { opacity: 0; transform: translate(6px, 100%); } }
+@media (prefers-reduced-motion: reduce) { .flake { display: none !important; } }
+:root[data-skin="christmas"] { --line: #1f3a28; }
+:root[data-skin="christmas"] .link { color: #FF6B6B; }
+:root[data-skin="christmas"] :focus-visible { outline: 2px solid #4ADE80; outline-offset: 2px; }
 /* Acentos naranja; los colores de estado y Permitir/Denegar no cambian. */
 :root[data-skin="halloween"] { --line: #3a2410; }
 :root[data-skin="halloween"] .link { color: #FF8A1F; }
