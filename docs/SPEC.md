@@ -325,6 +325,9 @@ siguen mandando · sin privilegios · el instalador siempre muestra diff y hace 
 
 ## Roadmap y riesgos
 
+La v1 está completa (v0.3.0). El siguiente alcance aún no está definido; la
+lista de abajo son solo ideas, no compromisos.
+
 Después de la v1: más terminales (iTerm2, Terminal.app, VS Code) y notificación de respaldo · Linux y Windows ·
 Codex como segundo agente · diff antes de permitir, atajos globales, más skins de temporada.
 
