@@ -66,6 +66,8 @@ export interface Settings {
   lang: "en" | "es" | null; // null = idioma del sistema
   onboarded: boolean;
   check_updates: boolean;
+  /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/mascot/skins.ts`). */
+  skin: "auto" | "classic" | "halloween";
 }
 
 export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";

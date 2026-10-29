@@ -20,6 +20,9 @@
         <button data-s="alerta">Alerta</button><button data-s="llena">Llena</button>
       </div>
       <div class="row">
+        <button data-k="classic">Classic</button><button data-k="halloween">Halloween</button>
+      </div>
+      <div class="row">
         <button data-r="saludo">Saludo</button><button data-r="aplastada">Aplastada</button>
         <button data-r="mareo">Mareo</button>
       </div>
@@ -34,6 +37,7 @@
       import { play } from "./src/sound/sfx.ts";
       const m = document.getElementById("m");
       document.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => (m.state = b.dataset.s)));
+      document.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => (m.skin = b.dataset.k)));
       document.querySelectorAll("[data-r]").forEach((b) => (b.onclick = () => m.react(b.dataset.r)));
       document.querySelectorAll("[data-snd]").forEach((b) => (b.onclick = () => play(b.dataset.snd)));
     </script>

@@ -72,3 +72,46 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
   instalar y reiniciar solo a petición.
 - [ ] Release: artefactos firmados del updater y `latest.json` en cada versión.
 - [ ] Cask en `HurgotDev/homebrew-tap` actualizado por el workflow de release.
+
+## M10 · Skins de temporada (ver `docs/SPEC.md` → "Skins")
+
+Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
+
+- [x] T1 · Ajuste `skin` y `resolveSkin`.
+  - Hecho: enum `Skin` en `src-tauri/src/settings.rs` (falta o desconocido
+    → `auto`, sin perder otros ajustes) reflejado en `ui/src/island/api.ts`;
+    `ui/src/mascot/skins.ts` con `resolveSkin(choice, date)`; script
+    `test:ui` en `package.json` y en Comandos de `CLAUDE.md`.
+  - Verificar: `cargo test -p pilas`, `npm run test:ui` (bordes 14/15 oct y
+    2/3 nov), `npm run typecheck`, `cargo clippy --workspace -- -D warnings`.
+- [x] T2 · Pilita con disfraz de Halloween.
+  - Hecho: atributo observado `skin` en `ui/src/mascot/pilita.ts`; sombrero
+    dentro del `rig`, murciélago sin solaparse con "z", exclamación ni
+    destellos, LEDs naranja; quieto con reduced-motion; encuadre ajustado
+    para que el sombrero no se recorte a 28 px; selector de skin en
+    `ui/playground.html`.
+  - Verificar: `npm run dev` → `/playground.html`, 4 estados × 3 reacciones
+    en las dos skins; colores de cuerpo idénticos a la clásica.
+- [x] T3 · Sonidos de Halloween.
+  - Hecho: `ui/src/sound/sfx.ts` con `configure({ skin })` y notas propias
+    de Alerta, Listo, Toque y Mareo (murciélagos); el resto cae en la
+    clásica; duración ±20 %.
+  - Verificar: `npm run typecheck`; a oído desde el playground.
+- [x] T4 · Conectar la skin en la app.
+  - Hecho: selector "Costume"/"Disfraz" en `ui/src/settings.ts` +
+    `ui/src/i18n.ts`; `ui/src/island/island.ts` resuelve la skin al
+    arrancar, al cambiar el ajuste y cada hora, la pone en todas las
+    `<pilas-mascot>`, en `data-skin` de la raíz y en `configure`; `.dot` de
+    calabaza en `ui/src/styles.css`.
+  - Verificar: `npm run app`; cambiar el ajuste cambia pilita, puntos y
+    sonidos al instante; en Automático hoy (28 oct) sale Halloween.
+- [x] T5 · Docs y cierre.
+  - Hecho: `README.md` (ajuste nuevo), `.changes/seasonal-skins.md`
+    (`bump: minor`), casillas marcadas.
+  - Verificar: releer el README; todos los comandos de T1 en verde.
+- [x] T6 · Contador oculto en 0 y ambiente Halloween en la isla.
+  - Hecho: `.badge[hidden]` no se ve (bug previo); badge de calabaza
+    naranja; murciélago que cruza la isla (sale de la pilita); resplandor,
+    telaraña, fantasmitas y acentos naranja según `docs/SPEC.md` → Skins.
+  - Verificar: render a tamaño real de píldora e isla abierta en ambas
+    skins; `npm run typecheck`, `npm run build`.

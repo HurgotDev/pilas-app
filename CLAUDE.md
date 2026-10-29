@@ -24,6 +24,7 @@ cargo build -p pilas-hook --release          # binario del hook
 npm install && npm run typecheck
 npm run app                                  # tauri dev (abre la isla)
 npm run dev                                  # solo la UI; playground de la pilita en /playground.html
+npm run test:ui                              # tests de la UI (node --test)
 ```
 
 ## Reglas que no se negocian

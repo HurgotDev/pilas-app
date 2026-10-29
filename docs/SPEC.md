@@ -29,9 +29,10 @@ Un agente (Claude Code), una plataforma validada (macOS) y una terminal con salt
 | Instalador de hooks con backup y diff | |
 | Ajustes mínimos | Pantalla, sonido, idioma, inicio con el sistema |
 | Idiomas | Inglés (por defecto) y español |
+| Skins de temporada | Clásica y Halloween; automática por fecha |
 
 Fuera de alcance: otros agentes, chat con IA, integraciones, diffs en vivo, uso del plan, app móvil, atajos
-globales, vestuario de la mascota, notificaciones del sistema, firma/notarización, builds oficiales de Windows y Linux.
+globales, skins hechas por el usuario, notificaciones del sistema, firma/notarización, builds oficiales de Windows y Linux.
 
 ## Stack y arquitectura
 
@@ -162,6 +163,105 @@ Mareo (pajaritos: 8 notas triangulares que alternan y bajan, ~0,7 s; sustituye
 al toque en el 3.er clic; los clics durante el mareo no inician otro).
 Ajustes: activado + volumen (50 % por defecto). Nunca en bucle.
 
+## Skins
+
+Disfraces de temporada para la pilita. Solo cambian lo visual y el sonido:
+estados, prioridad, reacciones, tiempos y lógica siguen idénticos. Todo vive
+en código (SVG, CSS y notas de Web Audio): sin archivos externos, sin red y
+sin dependencias nuevas. v1: `classic` (la de siempre) y `halloween`.
+
+**Regla de oro: el color del cuerpo sigue contando el estado.** Una skin
+añade accesorios y retoca detalles, pero nunca cambia `--body`, `--shade`,
+`--dark` ni `--foot`, ni oculta la cara, la exclamación o los LEDs.
+
+### Activación
+
+Ajuste "Costume" / "Disfraz" con tres opciones:
+
+- Automático (por defecto): `halloween` del 15 de octubre al 2 de noviembre,
+  ambos incluidos, con la fecha local; `classic` el resto del año.
+- Clásico: siempre `classic`.
+- Halloween: siempre `halloween`.
+
+En `settings.json` es `skin: "auto" | "classic" | "halloween"`. Un valor
+desconocido (por ejemplo, de una versión más nueva) se lee como `"auto"` sin
+perder el resto de los ajustes. La skin efectiva la resuelve una función pura
+`resolveSkin(choice, date)` en `ui/src/mascot/skins.ts`. Se recalcula al
+arrancar, al cambiar el ajuste y cada hora, así que el 3 de noviembre la
+pilita vuelve sola a la clásica sin reiniciar la app.
+
+### Halloween
+
+- **Pilita**: `<pilas-mascot skin="halloween">` (sin atributo o `classic` =
+  la de siempre). Sombrero de bruja sobre el borne, dentro del `rig`, así que
+  respira, flota, se aplasta y se marea con ella. Los LEDs encendidos pasan a
+  naranja calabaza. El disfraz completo se ve dentro de la píldora de 28 px
+  sin recortarse; se aplica a todas las pilitas (píldora, isla abierta y
+  onboarding).
+- **Punto de estado** (filas de la lista de sesiones): silueta de calabaza
+  pintada con el mismo color de estado de hoy; misma alineación y área de
+  clic.
+- **Contador de pendientes** (badge de la píldora): calabaza naranja con el
+  número encima. Con 0 pendientes no se ve, en cualquier skin.
+- **Ambiente de la isla** (píldora y abierta), siempre detrás del contenido,
+  sin recibir clics y sin tapar texto ni botones:
+  - Un murciélago cruza la isla de lado a lado en bucle, revoloteando.
+    Sustituye al murciélago que iba junto a la pilita.
+  - Resplandor naranja tenue en el borde inferior.
+  - Telaraña fina en una esquina inferior de la isla abierta.
+  - Uno o dos fantasmitas semitransparentes suben y se desvanecen de vez en
+    cuando en la isla abierta.
+  - Acentos naranja: separadores, enlaces y anillo de foco.
+  - No cambian: los colores de estado ni Permitir/Denegar.
+  - Con `prefers-reduced-motion` no hay murciélago volando ni fantasmas.
+  - Solo CSS (y SVG en línea): sin temporizadores de JS ni imágenes externas.
+- **Sonidos**: variantes "spooky" de Alerta, Listo, Toque y Mareo, con la
+  misma forma de onda 8-bit, una duración parecida (±20 %) y el mismo
+  volumen. Mareo cambia los pajaritos por murciélagos: chillidos agudos y
+  cortos que alternan y bajan, ~0,7 s. El resto (Recordatorio, Aprobado,
+  Denegado) usa los clásicos. Siguen respetando "activado" y el volumen, y
+  nunca suenan en bucle.
+
+### Implementación
+
+- `src-tauri/src/settings.rs`: enum `Skin` (`auto` por defecto, valor
+  desconocido → `auto`) y campo `skin`; `ui/src/island/api.ts` lo refleja.
+- `ui/src/mascot/skins.ts`: tipos `SkinChoice`/`Skin` y `resolveSkin`, sin
+  dependencias de DOM ni de Tauri.
+- `ui/src/mascot/pilita.ts`: atributo observado `skin`; capas `.v` nuevas y
+  color de LED por variable CSS. Sin cambios en poses ni temporizadores.
+- `ui/src/sound/sfx.ts`: `configure({ skin })` y tabla de notas por skin con
+  respaldo en la clásica.
+- `ui/src/styles.css`: `.dot` con forma de calabaza bajo
+  `[data-skin="halloween"]`.
+- `ui/src/settings.ts` + `ui/src/i18n.ts`: selector en Ajustes (en/es).
+- `/playground.html`: selector de skin para revisar todos los estados y
+  reacciones con cada disfraz.
+- `package.json`: script `test:ui`; `CLAUDE.md` lo lista en Comandos.
+- `README.md` (ajustes) y un fragmento en `.changes/` (`bump: minor`).
+
+### Pruebas
+
+- Rust (`cargo test -p pilas`): `skin` falta →
+  `auto`; valor desconocido → `auto` sin perder `volume` ni `lang`; ida y
+  vuelta de `classic`/`halloween`.
+- TS (`npm run test:ui`, nuevo script =
+  `node --test ui/src/mascot/skins.test.ts`; Node ≥ 22.18 quita los tipos
+  solo, sin dependencias nuevas): `resolveSkin` en 14 oct → `classic`,
+  15 oct y 2 nov → `halloween`, 3 nov → `classic`; `classic`/`halloween` ignoran la fecha.
+- A mano en el playground y en la app: los 4 estados y las 3 reacciones con
+  cada skin, en la píldora y en la isla abierta, con y sin reduced-motion.
+
+### Límites
+
+- Siempre: color de estado intacto; textos vía `t()`; `npm run typecheck`,
+  `cargo clippy --workspace -- -D warnings` y los tests en verde.
+- Preguntar antes: otra skin, cambiar la ventana de fechas, más adornos en
+  la isla de los descritos arriba, añadir una dependencia o un runner de
+  tests.
+- Nunca: descargar skins o assets, cambiar el comportamiento por la skin,
+  sonidos en bucle, cambiar los colores de estado.
+
 ## Saltar a la terminal
 
 Ghostty ≥ 1.3 expone AppleScript (https://ghostty.org/docs/features/applescript): jerarquía app → ventana →
@@ -186,6 +286,7 @@ ofrece reparar al iniciar, desinstala solo lo suyo.
 | Abrir isla al llegar un pendiente | Sí / No | Sí |
 | Iniciar con el sistema | Sí / No | Sí |
 | Buscar actualizaciones | Sí / No | Sí |
+| Disfraz | Automático / Clásico / Halloween | Automático |
 
 Actualizaciones: con el ajuste activado, la app consulta
 `https://github.com/HurgotDev/pilas-app/releases/latest/download/latest.json`
@@ -217,11 +318,15 @@ siguen mandando · sin privilegios · el instalador siempre muestra diff y hace 
 - Estados, reacciones y sonidos funcionan; silenciar los apaga.
 - El instalador hace backup, muestra diff, conserva hooks ajenos y desinstala solo los suyos.
 - La isla nunca roba el foco mientras escribes en otra app.
+- Con el disfraz en Automático, la pilita lleva el de Halloween del 15 oct al
+  2 nov y vuelve a la clásica sola; Clásico y Halloween lo fijan. En los 4
+  estados el color del cuerpo es el de siempre y el sombrero no se recorta en
+  la píldora.
 
 ## Roadmap y riesgos
 
 Después de la v1: más terminales (iTerm2, Terminal.app, VS Code) y notificación de respaldo · Linux y Windows ·
-Codex como segundo agente · diff antes de permitir, atajos globales, vestuario.
+Codex como segundo agente · diff antes de permitir, atajos globales, más skins de temporada.
 
 | Riesgo | Mitigación |
 | --- | --- |

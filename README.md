@@ -25,6 +25,10 @@ Spanish).
 - Click a session to jump to its exact Ghostty tab; with other terminals, it
   brings the app to the front.
 - Optional 8-bit sounds; interface in English and Spanish.
+- Seasonal costumes: from October 15 to November 2 the pilita dresses up
+  for Halloween, with its own sounds, a bat flying across the island and
+  pumpkin counters. Pick **Automatic**, **Classic** or
+  **Halloween** under **Costume** in Settings.
 
 Privacy: no accounts and no telemetry. The only internet connection is the
 update check, which can be turned off.

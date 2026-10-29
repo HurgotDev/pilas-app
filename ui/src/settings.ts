@@ -3,6 +3,7 @@ import "./mascot/pilita";
 import * as api from "./island/api";
 import { configure, play } from "./sound/sfx";
 import { lang, setLang, t, type Key, type Lang } from "./i18n";
+import { resolveSkin, type SkinChoice } from "./mascot/skins";
 import { getVersion } from "@tauri-apps/api/app";
 
 const STEPS = 4;
@@ -30,6 +31,9 @@ let confirmInstall = false; // pide confirmación antes de reiniciar
 let updateError = ""; // último error de actualizaciones
 
 const root = document.getElementById("app")!;
+
+// Skin efectiva de hoy para la pilita y los sonidos de esta ventana.
+const skinNow = () => resolveSkin(settings.skin, new Date());
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -101,7 +105,7 @@ async function install(): Promise<void> {
 
 // Guarda al instante y aplica el sonido en esta ventana. Un fallo se muestra en la vista.
 function save(): void {
-  configure({ enabled: settings.sound_enabled, volume: settings.volume });
+  configure({ enabled: settings.sound_enabled, volume: settings.volume, skin: skinNow() });
   api.setSettings(settings).catch((e: unknown) => {
     error = String(e);
     render();
@@ -163,7 +167,7 @@ const check = (key: BoolKey, label: Key) =>
   `<label class="row"><span>${t(label)}</span><input type="checkbox" data-bool="${key}" ${settings[key] ? "checked" : ""}></label>`;
 
 const STEP_BODY: (() => string)[] = [
-  () => `<pilas-mascot class="hero" state="cargando"></pilas-mascot>
+  () => `<pilas-mascot class="hero" state="cargando" skin="${skinNow()}"></pilas-mascot>
     <h1>${t("onb.welcome.title")}</h1><p>${t("onb.welcome.body")}</p>`,
   connectBody,
   () => `<h1>${t("onb.automation.title")}</h1><p>${t("onb.automation.body")}</p>`,
@@ -208,6 +212,11 @@ function settingsView(): string {
     ["es", t("set.lang.es")],
   ];
   const langCurrent = settings.lang ?? "system";
+  const skinOpts: [SkinChoice, Key][] = [
+    ["auto", "set.skin.auto"],
+    ["classic", "set.skin.classic"],
+    ["halloween", "set.skin.halloween"],
+  ];
   const vol = Math.round(settings.volume * 100);
   const preview = diff
     ? `<div class="diff">${diffHtml(diff.lines)}</div>
@@ -258,6 +267,9 @@ function settingsView(): string {
       ${check("launch_at_login", "set.launch_at_login")}
       <label class="row"><span>${t("set.language")}</span>
         <select data-lang>${langOpts.map(([v, l]) => `<option value="${v}" ${v === langCurrent ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>
+      </label>
+      <label class="row"><span>${t("set.skin")}</span>
+        <select data-skin>${skinOpts.map(([v, l]) => `<option value="${v}" ${v === settings.skin ? "selected" : ""}>${t(l)}</option>`).join("")}</select>
       </label>
     </section>
     <h2>${t("upd.title")}</h2>
@@ -311,6 +323,9 @@ root.addEventListener("change", (e) => {
     setLang(settings.lang);
     save();
     render();
+  } else if (el instanceof HTMLSelectElement && el.hasAttribute("data-skin")) {
+    settings.skin = el.value as SkinChoice;
+    save();
   }
 });
 
@@ -328,7 +343,7 @@ async function init(): Promise<void> {
   update = await api.getUpdateStatus();
   version = await getVersion().catch(() => "");
   setLang(settings.lang);
-  configure({ enabled: settings.sound_enabled, volume: settings.volume });
+  configure({ enabled: settings.sound_enabled, volume: settings.volume, skin: skinNow() });
   void api.onUpdate((u) => {
     update = u;
     render();
