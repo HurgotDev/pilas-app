@@ -101,15 +101,21 @@ mod imp {
     use super::{island_frame, pick_screen, IslandMode, Rect, ScreenChoice, ScreenInfo, OPEN_MAX_H};
     use block2::RcBlock;
     use objc2::rc::Retained;
-    use objc2::runtime::{AnyObject, NSObject};
+    use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
     use objc2::{define_class, ffi, msg_send, AnyThread, ClassType, DefinedClass, MainThreadMarker};
     use objc2_app_kit::{
-        NSApplication, NSApplicationDidChangeScreenParametersNotification, NSEvent, NSMainMenuWindowLevel, NSPanel,
-        NSScreen, NSTrackingArea, NSTrackingAreaOptions, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+        NSApplication, NSApplicationDidBecomeActiveNotification, NSApplicationDidChangeScreenParametersNotification,
+        NSEvent, NSMainMenuWindowLevel, NSPanel, NSScreen, NSTrackingArea, NSTrackingAreaOptions, NSWindow,
+        NSWindowCollectionBehavior, NSWindowStyleMask,
     };
-    use objc2_foundation::{NSNotification, NSNotificationCenter, NSPoint, NSRect, NSSize};
+    use objc2_foundation::{NSNotification, NSNotificationCenter, NSObjectProtocol, NSPoint, NSRect, NSSize};
+    use std::cell::RefCell;
     use std::ptr::NonNull;
+    use std::rc::Rc;
     use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+
+    /// Token del observador de notificaciones que devuelve `addObserverForName…`.
+    type Observer = Retained<ProtocolObject<dyn NSObjectProtocol>>;
 
     define_class!(
         /// NSWindow que puede ser clave (recibir teclado) sin activar la app.
@@ -249,8 +255,11 @@ mod imp {
         });
     }
 
-    /// Activa la app y trae al frente la ventana `label`. En la cola del hilo principal, para
-    /// que corra después del `show`/`build` pendiente (la isla no usa esto: nunca roba foco).
+    /// Trae al frente la ventana `label` y la deja como key con la app activa. WebKit toma su
+    /// estado activo del momento en que la ventana pasa a ser key, y `activate` es asíncrono:
+    /// si ya está activa se hace key directo; si no, se muestra sin foco y se hace key al
+    /// terminar la activación. En la cola del hilo principal, para que corra después del
+    /// `build` pendiente (la isla no usa esto: nunca roba foco).
     pub fn bring_to_front(app: &AppHandle, label: &'static str) {
         let handle = app.clone();
         let _ = app.run_on_main_thread(move || {
@@ -258,12 +267,43 @@ mod imp {
                 return;
             };
             let Ok(ptr) = window.ns_window() else { return };
-            // `activate()` exige macOS 14+ y el mínimo es 13.
-            #[allow(deprecated)]
-            NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
             // SAFETY: `ptr` es el NSWindow de `label` y estamos en el hilo principal.
             let w: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
-            w.makeKeyAndOrderFront(None);
+            let ns_app = NSApplication::sharedApplication(mtm);
+            if ns_app.isActive() {
+                w.makeKeyAndOrderFront(None);
+                return;
+            }
+            // Visible aunque macOS rechace la activación.
+            w.orderFrontRegardless();
+            // `activate()` exige macOS 14+ y el mínimo es 13.
+            #[allow(deprecated)]
+            ns_app.activateIgnoringOtherApps(true);
+            // Observador de un solo disparo: se quita a sí mismo al activarse la app.
+            let token: Rc<RefCell<Option<Observer>>> = Rc::default();
+            let slot = token.clone();
+            let block = RcBlock::new(move |_: NonNull<NSNotification>| {
+                let Some(token) = slot.borrow_mut().take() else { return };
+                // SAFETY: el token vino de `addObserverForName…` del mismo centro.
+                unsafe { NSNotificationCenter::defaultCenter().removeObserver(token.as_ref()) };
+                if let Some(window) = handle.get_webview_window(label) {
+                    if let Ok(ptr) = window.ns_window() {
+                        // SAFETY: igual que arriba; el bloque corre en el hilo principal.
+                        let w: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+                        w.makeKeyAndOrderFront(None);
+                    }
+                }
+            });
+            // SAFETY: el centro copia el bloque; el token vive en `token` hasta que se dispare.
+            let observer = unsafe {
+                NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(
+                    Some(NSApplicationDidBecomeActiveNotification),
+                    None,
+                    None,
+                    &block,
+                )
+            };
+            *token.borrow_mut() = Some(observer);
         });
     }
 
@@ -302,13 +342,18 @@ mod imp {
 #[cfg(not(target_os = "macos"))]
 mod imp {
     use super::{IslandMode, ScreenChoice};
-    use tauri::{AppHandle, WebviewWindow};
+    use tauri::{AppHandle, Manager, WebviewWindow};
 
     pub fn make_panel(_window: &WebviewWindow) {}
 
     pub fn place(_app: &AppHandle, _screen: ScreenChoice, _mode: IslandMode, _open_height: Option<f64>) {}
 
-    pub fn bring_to_front(_app: &AppHandle, _label: &'static str) {}
+    pub fn bring_to_front(app: &AppHandle, label: &'static str) {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
 
     pub fn watch_screens(_on_change: impl Fn() + 'static) {}
 
