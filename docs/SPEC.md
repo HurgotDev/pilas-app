@@ -116,11 +116,10 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
 - Si la pestaña de Ghostty de esa sesión ya tiene el foco (Ghostty al frente
   y su terminal enfocada con el mismo TTY; en sesiones en segundo plano, con
   el título `<glifo> <nombre>` igual al nombre que da `claude agents --json`
-  para su `pid`), el pendiente entra en la cola en
-  silencio: sin abrir la isla, sin alerta ni recordatorio. Mientras haya
-  pendientes en silencio se revisa el foco cada 1 s; al perderlo, se avisa
-  como un pendiente nuevo. Otras terminales o cualquier fallo al comprobarlo:
-  se avisa siempre.
+  para su `pid`), Pilas devuelve el control a la terminal al instante, como
+  "Responder en la terminal": sin tarjeta, sin abrir la isla y sin sonido.
+  Si luego cambias de pestaña no se avisa. Otras terminales o cualquier fallo
+  al comprobarlo: se avisa como siempre.
 - Clic fuera o `Esc` contrae a píldora; el pendiente sigue en cola.
 - Lista: pendientes arriba, luego por actividad. Fila: punto de estado, proyecto, última acción, tiempo. Clic salta a la terminal.
 - Tarjeta de permiso: proyecto + herramienta, detalle en monoespaciada (6 líneas y "ver más"), Permitir / Siempre /

@@ -1,7 +1,8 @@
 //! Servidor del socket local: una conexión por invocación de `pilas-hook`, NDJSON.
 
-use crate::{emit_snapshot, ensure_focus_watch, AppState, Outcome, PendingRequest};
-use pilas_core::protocol::{HookMessage, PROTOCOL_VERSION};
+use crate::{emit_snapshot, AppState, Outcome, PendingRequest};
+use pilas_core::decision;
+use pilas_core::protocol::{AppReply, HookMessage, PROTOCOL_VERSION};
 use pilas_core::session::StoreEvent;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::mpsc;
@@ -67,11 +68,15 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
                 let _ = app.emit("pilas://finished", id.clone());
             }
         }
-        if msg.blocking {
+        let session_id = pilas_core::protocol::session_id(&msg.payload)
+            .unwrap_or_default()
+            .to_string();
+        if quiet {
+            // La terminal enfocada pregunta ella misma: no se encola y se deshace el pendiente de `apply`.
+            inner.store.resolve_pending(&session_id);
+            None
+        } else if msg.blocking {
             let (tx, rx) = mpsc::channel();
-            let session_id = pilas_core::protocol::session_id(&msg.payload)
-                .unwrap_or_default()
-                .to_string();
             inner.pending.insert(
                 msg.id.clone(),
                 PendingRequest {
@@ -79,7 +84,6 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
                     event: msg.event.clone(),
                     payload: msg.payload.clone(),
                     tx: tx.clone(),
-                    quiet,
                 },
             );
             inner.queue.push_back(msg.id.clone());
@@ -96,20 +100,18 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
     };
     emit_snapshot(&app);
     if quiet {
-        ensure_focus_watch(&app);
-    } else if msg.blocking {
+        // Igual que "Responder en la terminal": sin stdout, Claude Code muestra su diálogo nativo.
+        let stdout = (msg.event == "PreToolUse").then(decision::question_to_terminal);
+        write_reply(stream, &AppReply::new(msg.id, stdout));
+        return;
+    }
+    if msg.blocking {
         let _ = app.emit("pilas://pending", msg.id.clone()); // la UI abre la isla y suena la alerta
     }
 
     let Some(rx) = rx else { return };
     match rx.recv() {
-        Ok(Outcome::Reply(reply)) => {
-            let mut stream = stream;
-            if let Ok(mut out) = serde_json::to_string(&reply) {
-                out.push('\n');
-                let _ = stream.write_all(out.as_bytes());
-            }
-        }
+        Ok(Outcome::Reply(reply)) => write_reply(stream, &reply),
         Ok(Outcome::HookGone) | Err(_) => {
             // Descartar la tarjeta: la decisión ya no tiene a quién llegar.
             let mut inner = state.0.lock().unwrap();
@@ -120,5 +122,14 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
             drop(inner);
             emit_snapshot(&app);
         }
+    }
+}
+
+/// Escribe la respuesta como una línea JSON hacia el hook.
+#[cfg(unix)]
+fn write_reply(mut stream: std::os::unix::net::UnixStream, reply: &AppReply) {
+    if let Ok(mut out) = serde_json::to_string(reply) {
+        out.push('\n');
+        let _ = stream.write_all(out.as_bytes());
     }
 }
