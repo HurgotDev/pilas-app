@@ -302,8 +302,7 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
 
 /// Muestra la ventana de ajustes, o la crea si no existe.
 fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
-    if let Some(window) = app.get_webview_window("settings") {
-        window.show()?;
+    if app.get_webview_window("settings").is_some() {
         panel::bring_to_front(app, "settings");
         return Ok(());
     }
@@ -311,6 +310,7 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
         .title("Pilas")
         .inner_size(520.0, 560.0)
         .resizable(false)
+        .visible(false)
         .center()
         .build()?;
     panel::bring_to_front(app, "settings");
