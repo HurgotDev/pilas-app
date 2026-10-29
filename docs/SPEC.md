@@ -263,21 +263,64 @@ pilita vuelve sola a la clásica sin reiniciar la app.
 
 ### Implementación
 
-- `src-tauri/src/settings.rs`: enum `Skin` (`auto` por defecto, valor
-  desconocido → `auto`) y campo `skin`; `ui/src/island/api.ts` lo refleja.
-- `ui/src/mascot/skins.ts`: tipos `SkinChoice`/`Skin` y `resolveSkin`, sin
-  dependencias de DOM ni de Tauri.
-- `ui/src/mascot/pilita.ts`: atributo observado `skin`; capas `.v` nuevas y
-  color de LED por variable CSS. Sin cambios en poses ni temporizadores.
-- `ui/src/sound/sfx.ts`: `configure({ skin })` y tabla de notas por skin con
-  respaldo en la clásica.
-- `ui/src/styles.css`: `.dot` con forma de calabaza bajo
-  `[data-skin="halloween"]` y de bola bajo `[data-skin="christmas"]`.
-- `ui/src/settings.ts` + `ui/src/i18n.ts`: selector en Ajustes (en/es).
-- `/playground.html`: selector de skin para revisar todos los estados y
-  reacciones con cada disfraz.
-- `package.json`: script `test:ui`; `CLAUDE.md` lo lista en Comandos.
-- `README.md` (ajustes) y un fragmento en `.changes/` (`bump: minor`).
+Registro de skins autocontenidas (Registry + Strategy). Cada skin es un
+objeto `SkinDef` con la misma forma; los consumidores piden la activa al
+registro y la usan sin nombrarla. Ningún consumidor tiene un `if` ni un
+selector por nombre de skin.
+
+```ts
+// ui/src/skins/types.ts
+interface SkinDef {
+  id: Skin;
+  label: Key;                                   // clave de i18n
+  season?: { from: [number, number]; to: [number, number] }; // [mes, día]
+  mascot?: { accessory: string; leds?: string[] };
+  ambience?: string;                            // marcado de la capa de la isla
+  sounds?: Partial<Record<Sound, Note[]>>;      // los que faltan: clásicos
+  behavior?: { start(layer: HTMLElement): void; stop(): void };
+}
+```
+
+- Solo `id` y `label` son obligatorios. `classic` es la skin vacía: todo lo
+  demás cae a los valores por defecto (sin accesorio, LEDs amarillos, sin
+  ambiente, sonidos clásicos, nunca elegida por Automático).
+- **Identidad vs. vestuario.** La identidad de la pilita (cuerpo, cara,
+  colores de estado, poses, gestos, reacciones y tiempos) vive solo en
+  `pilita.ts` y ninguna skin la recibe. Una skin no aporta CSS a la pilita:
+  `accessory` es un SVG que la pilita coloca en su ranura sobre el borne,
+  dentro del `rig`, y `leds` tiñe los LEDs encendidos (se reparten en ciclo
+  si hay menos colores que LEDs).
+- `behavior` solo para lo que necesita JS (el muñeco de nieve). Recibe solo
+  la capa de ambiente de su skin, nunca la pilita. La isla llama `stop()` en
+  la anterior y `start()` en la nueva; con reduced motion no llama `start()`.
+
+Archivos:
+
+- `ui/src/skins/types.ts`: `SkinDef`.
+- `ui/src/skins/index.ts`: registro `SKINS` (`satisfies Record<Skin,
+  SkinDef>`), tipos `Skin`/`SkinChoice` y `resolveSkin(choice, date)`, que
+  devuelve la skin cuya `season` contiene la fecha (admite rangos que cruzan
+  el año, p. ej. 24 dic → 6 ene) o `classic`. Importable desde Node: sin DOM
+  al importar ni imports de CSS.
+- `ui/src/skins/<id>/`: `index.ts` con su `SkinDef` y, si lo necesita,
+  `<id>.css` (punto de estado, contador, ambiente y acentos bajo
+  `:root[data-skin="<id>"]`). Los CSS se cargan todos con
+  `import.meta.glob` desde la entrada de la isla.
+- `ui/src/skins/christmas/snowman.ts`: `nextAction(rand, x)` pura, con tests.
+- `ui/src/mascot/pilita.ts`: atributo observado `skin`; pinta el accesorio y
+  los LEDs de la skin activa del registro.
+- `ui/src/island/island.ts`: monta el `ambience` de cada skin en su capa,
+  fija `data-skin` en la raíz y gestiona `behavior`.
+- `ui/src/sound/sfx.ts`: `SKINS[skin].sounds?.[name] ?? CLASSIC[name]`.
+- `ui/src/settings.ts` y `/playground.html`: opciones generadas desde el
+  registro ("Automático" fijo en Ajustes). Textos en `ui/src/i18n.ts`.
+- `src-tauri/src/settings.rs`: el enum `Skin` se queda (valida lo leído de
+  `settings.json`; desconocido → `auto`). `ui/src/skins/ids.json` es la lista
+  compartida: Rust la lee en un test y TS comprueba que coincide con las
+  claves de `SKINS`.
+
+Añadir una skin = su carpeta, una línea en `SKINS`, su id en `ids.json`, la
+variante en Rust y sus claves en `i18n.ts`.
 
 ### Pruebas
 
@@ -289,7 +332,15 @@ pilita vuelve sola a la clásica sin reiniciar la app.
   solo, sin dependencias nuevas): `resolveSkin` en 14 oct → `classic`,
   15 oct y 2 nov → `halloween`, 3 nov → `classic`; 30 nov → `classic`,
   1 dic y 26 dic → `christmas`, 27 dic → `classic`; las opciones fijas
-  ignoran la fecha.
+  ignoran la fecha; un rango que cruza el año (24 dic → 6 ene) contiene el
+  31 dic y el 1 ene.
+- TS, registro: las claves de `SKINS` coinciden con `ids.json` y cada `id`
+  con su clave; una skin con solo `id` y `label` no rompe a ningún
+  consumidor puro.
+- TS, límites (cadenas, para cada skin): `accessory` no contiene `<style`,
+  `class="v`, `--body`, `--shade`, `--dark`, `--foot`, `rig` ni
+  `data-state`; ningún CSS de skin selecciona `pilas-mascot` ni `.lit`, y
+  todos sus selectores van bajo `:root[data-skin="<id>"]`.
 - A mano en el playground y en la app: los 4 estados y las 3 reacciones con
   cada skin, en la píldora y en la isla abierta, con y sin reduced-motion.
 
@@ -301,7 +352,10 @@ pilita vuelve sola a la clásica sin reiniciar la app.
   la isla de los descritos arriba, añadir una dependencia o un runner de
   tests.
 - Nunca: descargar skins o assets, cambiar el comportamiento por la skin,
-  sonidos en bucle, cambiar los colores de estado.
+  sonidos en bucle, cambiar los colores de estado, dar a una skin acceso a
+  la cara, poses, reacciones, tiempos o colores de estado de la pilita. Un
+  gesto o animación nueva de la pilita no es de una skin: se especifica en
+  "Mascota: la pilita" y vale para todas, `classic` incluida.
 
 ## Saltar a la terminal
 
