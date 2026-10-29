@@ -19,6 +19,9 @@ Spanish).
 - Approve permissions (**Allow**, **Deny**, **Always**) and answer Claude
   Code's questions without switching windows, or send them back to the
   terminal.
+- Stays quiet while you are already in the session that asks: if its Ghostty
+  tab is focused, the request waits in the queue without opening the island
+  or playing a sound, and Pilas alerts you as soon as you switch away.
 - Click a session to jump to its exact Ghostty tab; with other terminals, it
   brings the app to the front.
 - Optional 8-bit sounds; interface in English and Spanish.
