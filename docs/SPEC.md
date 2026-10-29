@@ -113,6 +113,13 @@ Isla negra, texto blanco, nunca roba el foco salvo cuando el usuario la abre.
   solo reacciona (aplastada, mareo con 3 clics). Clic en la píldora fuera de
   la pilita alterna abrir/cerrar, como hasta ahora.
 - Pendiente nuevo: la isla se abre sola, suena la alerta, sin tomar el foco. Varios: FIFO con "1 de N".
+- Si la pestaña de Ghostty de esa sesión ya tiene el foco (Ghostty al frente
+  y su terminal enfocada con el mismo TTY; en sesiones en segundo plano, con
+  el título `<glifo> <nombre>` igual al nombre que da `claude agents --json`
+  para su `pid`), Pilas devuelve el control a la terminal al instante, como
+  "Responder en la terminal": sin tarjeta, sin abrir la isla y sin sonido.
+  Si luego cambias de pestaña no se avisa. Otras terminales o cualquier fallo
+  al comprobarlo: se avisa como siempre.
 - Clic fuera o `Esc` contrae a píldora; el pendiente sigue en cola.
 - Lista: pendientes arriba, luego por actividad. Fila: punto de estado, proyecto, última acción, tiempo. Clic salta a la terminal.
 - Tarjeta de permiso: proyecto + herramienta, detalle en monoespaciada (6 líneas y "ver más"), Permitir / Siempre /
