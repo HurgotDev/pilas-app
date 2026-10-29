@@ -150,7 +150,9 @@ Prioridad: Alerta > Llena > Cargando > Dormida. Reacciones: hover → saludo (1,
 ## Sonidos
 
 Web Audio, ondas cuadrada y triangular, sin archivos (`ui/src/sound/sfx.ts`). Alerta (dos notas ascendentes),
-Recordatorio (una vez, a los 60 s), Listo (arpegio), Aprobado (blip), Denegado (nota grave), Toque (boing).
+Recordatorio (una vez, a los 60 s), Listo (arpegio), Aprobado (blip), Denegado (nota grave), Toque (boing),
+Mareo (pajaritos: 8 notas triangulares que alternan y bajan, ~0,7 s; sustituye
+al toque en el 3.er clic; los clics durante el mareo no inician otro).
 Ajustes: activado + volumen (50 % por defecto). Nunca en bucle.
 
 ## Saltar a la terminal

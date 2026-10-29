@@ -337,8 +337,9 @@ export function mountIsland(root: HTMLElement): void {
     open = !open;
     render();
   });
-  mascot.addEventListener("pilita-click", () => {
-    if (mascot.state !== "alerta") play("toque"); // en alerta no hay reacciones ni sonido de toque
+  mascot.addEventListener("pilita-click", (e) => {
+    // En alerta no hay reacciones ni sonido; el 3er clic (mareo) suena distinto al toque.
+    if (mascot.state !== "alerta") play((e as CustomEvent).detail?.reaction === "mareo" ? "mareo" : "toque");
     if (!open) { open = true; render(); }
   });
   window.addEventListener("keydown", (e) => {

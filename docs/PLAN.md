@@ -46,6 +46,9 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] Estados y reacciones integrados con la prioridad Alerta > Llena > Cargando > Dormida.
 - [x] Sonidos con ajuste de activado y volumen (`configure()` en `sfx.ts`;
   se persiste en M7); un solo recordatorio a los 60 s de un pendiente.
+- [x] Sonido de mareo: `"mareo"` en `sfx.ts`; `pilita-click` lleva la
+  reacción en `detail.reaction` y la isla toca mareo en vez de toque en el
+  3.er clic.
 
 ## M6 · Saltar a Ghostty
 - [x] Verificar en Script Editor (Ghostty.sdef) si cada terminal expone su TTY; si sí, emparejar por TTY.
