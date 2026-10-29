@@ -189,7 +189,7 @@ Ajuste "Costume" / "Disfraz" con cuatro opciones:
 En `settings.json` es `skin: "auto" | "classic" | "halloween" | "christmas"`. Un valor
 desconocido (por ejemplo, de una versión más nueva) se lee como `"auto"` sin
 perder el resto de los ajustes. La skin efectiva la resuelve una función pura
-`resolveSkin(choice, date)` en `ui/src/mascot/skins.ts`. Se recalcula al
+`resolveSkin(choice, date)` en `ui/src/skins/index.ts`. Se recalcula al
 arrancar, al cambiar el ajuste y cada hora, así que el 3 de noviembre la
 pilita vuelve sola a la clásica sin reiniciar la app.
 
@@ -255,7 +255,7 @@ pilita vuelve sola a la clásica sin reiniciar la app.
     encadenado que elige la siguiente acción. Solo corre con la skin
     `christmas` activa y sin reduced motion, y se detiene al cambiar de
     skin. La elección vive en una función pura
-    (`ui/src/island/snowman.ts`, `nextAction(rand, x)`) con tests en
+    (`ui/src/skins/christmas/snowman.ts`, `nextAction(rand, x)`) con tests en
     `snowman.test.ts`.
 - **Sonidos**: variantes de cascabeles de Alerta, Listo, Toque y Mareo, misma
   forma de onda 8-bit, duración parecida (±20 %) y mismo volumen. El resto
@@ -328,7 +328,7 @@ variante en Rust y sus claves en `i18n.ts`.
   `auto`; valor desconocido → `auto` sin perder `volume` ni `lang`; ida y
   vuelta de `classic`/`halloween`/`christmas`.
 - TS (`npm run test:ui`, nuevo script =
-  `node --test ui/src/mascot/skins.test.ts`; Node ≥ 22.18 quita los tipos
+  `node --test` con los tests de `ui/src/skins/`; Node ≥ 22.18 quita los tipos
   solo, sin dependencias nuevas): `resolveSkin` en 14 oct → `classic`,
   15 oct y 2 nov → `halloween`, 3 nov → `classic`; 30 nov → `classic`,
   1 dic y 26 dic → `christmas`, 27 dic → `classic`; las opciones fijas
