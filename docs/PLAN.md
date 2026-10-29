@@ -92,7 +92,7 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     `ui/playground.html`.
   - Verificar: `npm run dev` → `/playground.html`, 4 estados × 3 reacciones
     en las dos skins; colores de cuerpo idénticos a la clásica.
-- [ ] T3 · Sonidos de Halloween.
+- [x] T3 · Sonidos de Halloween.
   - Hecho: `ui/src/sound/sfx.ts` con `configure({ skin })` y notas propias
     de Alerta, Listo, Toque y Mareo (murciélagos); el resto cae en la
     clásica; duración ±20 %.
