@@ -19,9 +19,7 @@
         <button data-s="dormida">Dormida</button><button data-s="cargando">Cargando</button>
         <button data-s="alerta">Alerta</button><button data-s="llena">Llena</button>
       </div>
-      <div class="row">
-        <button data-k="classic">Classic</button><button data-k="halloween">Halloween</button><button data-k="christmas">Christmas</button>
-      </div>
+      <div class="row" id="skins"></div>
       <div class="row">
         <button data-r="saludo">Saludo</button><button data-r="aplastada">Aplastada</button>
         <button data-r="mareo">Mareo</button>
@@ -35,6 +33,10 @@
     <script type="module">
       import "./src/mascot/pilita.ts";
       import { play } from "./src/sound/sfx.ts";
+      import { SKINS } from "./src/skins/index.ts";
+      import { t } from "./src/i18n.ts";
+      document.getElementById("skins").innerHTML = Object.values(SKINS)
+        .map((k) => `<button data-k="${k.id}">${t(k.label)}</button>`).join("");
       const m = document.getElementById("m");
       document.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => (m.state = b.dataset.s)));
       document.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => (m.skin = b.dataset.k)));
