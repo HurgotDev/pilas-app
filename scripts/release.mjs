@@ -9,6 +9,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const BUMPS = ["patch", "minor", "major"];
+// "none": el cambio no necesita versión nueva (docs, README, CI).
+const FRAGMENT_BUMPS = ["none", ...BUMPS];
 const GROUPS = { major: "Breaking changes", minor: "Added", patch: "Fixes and improvements" };
 
 // Devuelve { bump, body } o lanza un Error con el motivo.
@@ -18,7 +20,9 @@ export function parseFragment(text) {
   const bumpLine = /^bump:\s*(\S+)\s*(#.*)?$/m.exec(m[1]);
   if (!bumpLine) throw new Error("missing 'bump:' in the frontmatter");
   const bump = bumpLine[1];
-  if (!BUMPS.includes(bump)) throw new Error(`invalid bump '${bump}' (use ${BUMPS.join(" | ")})`);
+  if (!FRAGMENT_BUMPS.includes(bump)) {
+    throw new Error(`invalid bump '${bump}' (use ${FRAGMENT_BUMPS.join(" | ")})`);
+  }
   // El cuerpo se convierte en una sola viñeta.
   const body = m[2].trim().replace(/\s*\n\s*/g, " ");
   if (!body) throw new Error("the body is empty");
@@ -36,6 +40,12 @@ export function nextVersion(current, bumps) {
   else if (top === 1) [minor, patch] = [minor + 1, 0];
   else patch += 1;
   return `${major}.${minor}.${patch}`;
+}
+
+// Versión siguiente según los fragmentos que cuentan; null si todos son "none".
+export function releaseVersion(current, fragments) {
+  const bumps = fragments.map((f) => f.bump).filter((b) => b !== "none");
+  return bumps.length ? nextVersion(current, bumps) : null;
 }
 
 export function renderSection(version, date, fragments) {
@@ -134,7 +144,13 @@ function prepare() {
   const { fragments, errors } = readFragments();
   if (errors.length) throw new Error(errors.join("\n"));
   if (!fragments.length) throw new Error("there are no fragments in .changes/: nothing to publish");
-  const version = nextVersion(currentVersion(), fragments.map((f) => f.bump));
+  const current = currentVersion();
+  const version = releaseVersion(current, fragments);
+  if (!version) {
+    for (const f of fragments) fs.rmSync(path.join(CHANGES, f.name));
+    console.log(`no release needed: version stays at ${current}`);
+    return;
+  }
 
   write("src-tauri/tauri.conf.json", setJsonVersion(read("src-tauri/tauri.conf.json"), version));
   write("package.json", setJsonVersion(read("package.json"), version));

@@ -5,6 +5,7 @@ import {
   nextVersion,
   parseFragment,
   prependSection,
+  releaseVersion,
   renderSection,
   setCargoVersion,
   buildLatest,
@@ -22,6 +23,26 @@ test("parseFragment rejects invalid fragments", () => {
   assert.throws(() => parseFragment("---\nfoo: 1\n---\nx"), /bump:/);
   assert.throws(() => parseFragment("---\nbump: huge\n---\nx"), /invalid bump/);
   assert.throws(() => parseFragment("---\nbump: patch\n---\n  \n"), /is empty/);
+});
+
+test("parseFragment accepts bump none and lists it in the error", () => {
+  assert.deepEqual(parseFragment("---\nbump: none\n---\nAdd a GIF.\n"), { bump: "none", body: "Add a GIF." });
+  assert.throws(() => parseFragment("---\nbump: huge\n---\nx"), /use none \| patch \| minor \| major/);
+});
+
+test("releaseVersion ignores none fragments and returns null when all are none", () => {
+  assert.equal(releaseVersion("0.3.0", [{ bump: "none" }]), null);
+  assert.equal(releaseVersion("0.3.0", [{ bump: "none" }, { bump: "none" }]), null);
+  assert.equal(releaseVersion("0.3.0", [{ bump: "none" }, { bump: "patch" }]), "0.3.1");
+  assert.equal(releaseVersion("0.3.0", [{ bump: "minor" }, { bump: "none" }]), "0.4.0");
+});
+
+test("renderSection leaves out none fragments", () => {
+  const s = renderSection("0.3.1", "2026-10-29", [
+    { bump: "none", body: "Add a GIF." },
+    { bump: "patch", body: "Fix A." },
+  ]);
+  assert.equal(s, "## [0.3.1] - 2026-10-29\n\n### Fixes and improvements\n\n- Fix A.\n");
 });
 
 test("nextVersion applies the highest bump", () => {
