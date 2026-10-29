@@ -191,6 +191,7 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
         pilas_jump::JumpTarget {
             term_program: s.term_program.clone(),
             tty: s.tty.clone(),
+            pid: s.pid,
             cwd: Some(s.cwd.clone()),
             cached_terminal_id: inner.terminal_ids.get(&session_id).cloned(),
         }

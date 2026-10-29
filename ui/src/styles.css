@@ -12,7 +12,7 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 
 /* La isla es siempre negra para fundirse con el notch. Ancho y alto salen de island.ts (--w, --h) para poder
    animarlos; la ventana nativa ya es igual o mayor (ver panel.rs). */
-.island { margin: 0 auto; width: var(--w, 100%); height: var(--h, 32px); background: #000; color: var(--ink);
+.island { position: relative; margin: 0 auto; width: var(--w, 100%); height: var(--h, 32px); background: #000; color: var(--ink);
           border-radius: 0 0 20px 20px; overflow: hidden;
           transition: width .3s cubic-bezier(.32,.72,0,1), height .3s cubic-bezier(.32,.72,0,1),
                       border-radius .3s cubic-bezier(.32,.72,0,1); }
@@ -21,12 +21,14 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .island[data-size="hidden"] > * { visibility: hidden; }
 .island[data-size="open"]   { border-radius: 0 0 24px 24px; }
 
-.pill { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 10px; }
+.pill { position: relative; height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px 0 10px; }
 .pill pilas-mascot { height: 28px; }
 .badge { min-width: 20px; height: 20px; border-radius: 10px; background: var(--deny); font-size: 12px; font-weight: 700;
          display: grid; place-items: center; padding: 0 6px; }
+/* display: grid pisa el atributo hidden: sin pendientes el contador no se ve. */
+.badge[hidden] { display: none; }
 
-.panel { box-sizing: border-box; min-width: 420px; padding: 4px 16px 16px;
+.panel { position: relative; box-sizing: border-box; min-width: 420px; padding: 4px 16px 16px;
          transition: opacity .15s ease, visibility 0s .3s; opacity: 0; visibility: hidden; }
 .island[data-size="open"] .panel { opacity: 1; visibility: visible; transition: opacity .2s ease .1s; }
 @media (prefers-reduced-motion: reduce) { .island, .panel { transition: none !important; } }
@@ -37,6 +39,42 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .dot[data-s="pendiente"]  { background: var(--deny); }
 .dot[data-s="en_espera"]  { background: #5b6584; }
 .dot[data-s="error"]      { background: #ffd84a; }
+/* Halloween: el mismo color de estado recortado en silueta de calabaza; 10 px con margen -1 px ocupa lo mismo que el punto de 8 px. */
+:root[data-skin="halloween"] .dot {
+  width: 10px; height: 10px; margin: -1px; border-radius: 0;
+  --pumpkin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect x='4.4' y='0' width='1.3' height='2.6' rx='.5'/%3E%3Cellipse cx='3.2' cy='6' rx='2.8' ry='3.5'/%3E%3Cellipse cx='6.8' cy='6' rx='2.8' ry='3.5'/%3E%3Cellipse cx='5' cy='6' rx='2' ry='3.8'/%3E%3C/svg%3E");
+  -webkit-mask-image: var(--pumpkin); mask-image: var(--pumpkin);
+  -webkit-mask-size: contain; mask-size: contain;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+/* Halloween: contador en calabaza (se estira con 2 cifras); el padding superior deja el tallo libre. */
+:root[data-skin="halloween"] .badge {
+  height: 22px; min-width: 22px; padding: 3px 6px 0; box-sizing: border-box; border-radius: 0; color: #1B1B2E;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' preserveAspectRatio='none'%3E%3Cpath d='M10 1.5 Q11.5 0 12.6 1.2 L12.2 5.5 L10.3 5.5 Z' fill='%233E7B2E'/%3E%3Cellipse cx='6.6' cy='13.6' rx='6.3' ry='8' fill='%23E0700E'/%3E%3Cellipse cx='15.4' cy='13.6' rx='6.3' ry='8' fill='%23E0700E'/%3E%3Cellipse cx='11' cy='13.6' rx='5.4' ry='8.3' fill='%23FF8A1F'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+/* Ambiente halloween: capa absoluta antes de .pill/.panel (posicionados), así queda detrás y sin clics. */
+.spooky { display: none; position: absolute; inset: 0; pointer-events: none; }
+:root[data-skin="halloween"] .spooky { display: block; }
+:root[data-skin="halloween"] .island:not([data-size="hidden"]) { box-shadow: inset 0 -8px 10px -8px rgba(255,138,31,.45); }
+/* El carril mide lo que la isla: trasladarlo 100% + 14 px lleva al murciélago de un borde al otro. */
+.bat-track { position: absolute; top: 6px; left: -14px; width: 100%; animation: batfly 9s ease-in-out infinite alternate; }
+.bat { display: block; width: 14px; height: 6.3px; fill: #9B7BE0; animation: batbob 1.3s ease-in-out infinite; }
+.wing { transform-box: fill-box; animation: batflap .25s ease-in-out infinite alternate; }
+.wing-l { transform-origin: 100% 50%; } .wing-r { transform-origin: 0 50%; }
+@keyframes batfly  { to { transform: translateX(calc(100% + 14px)); } }
+@keyframes batbob  { 50% { transform: translateY(5px); } }
+@keyframes batflap { to { transform: scaleY(.4); } }
+.web, .ghost { display: none; position: absolute; }
+.island[data-size="open"] .web, .island[data-size="open"] .ghost { display: block; }
+.web { left: 6px; bottom: 6px; width: 40px; height: 40px; opacity: .14; }
+.ghost { left: 28%; bottom: 14px; width: 12px; height: 14px; opacity: 0; animation: ghostrise 11s ease-out 3s infinite; }
+.ghost.g2 { left: auto; right: 22%; width: 9px; height: 10.5px; animation-duration: 14s; animation-delay: 8s; }
+@keyframes ghostrise { 0% { opacity: 0; transform: none; } 6% { opacity: .3; } 18%, 100% { opacity: 0; transform: translateY(-44px); } }
+@media (prefers-reduced-motion: reduce) { .bat-track, .ghost { display: none !important; } }
+/* Acentos naranja; los colores de estado y Permitir/Denegar no cambian. */
+:root[data-skin="halloween"] { --line: #3a2410; }
+:root[data-skin="halloween"] .link { color: #FF8A1F; }
+:root[data-skin="halloween"] :focus-visible { outline: 2px solid #FF8A1F; outline-offset: 2px; }
 .row .name { font-weight: 700; }
 .row .action { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .ago { color: var(--muted); flex: none; white-space: nowrap; }
@@ -52,7 +90,7 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .b-allow { background: var(--allow); } .b-always { background: #2a2d3a; } .b-deny { background: var(--deny); }
 .buttons button:disabled { opacity: .4; cursor: default; }
 .q-text { font-weight: 700; line-height: 18px; }
-.q-options { display: flex; flex-direction: column; gap: 6px; }
+.q-options { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow: auto; }
 .q-opt { font: inherit; text-align: left; color: var(--ink); background: #2a2d3a; border: 0; border-radius: 10px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .q-opt.on { background: var(--accent); }
 .q-opt.q-multi { flex-direction: row; align-items: center; gap: 10px; }

@@ -3,6 +3,7 @@ import type { PilitaMascot, PilitaState } from "../mascot/pilita";
 import { configure, play } from "../sound/sfx";
 import * as api from "./api";
 import { setLang, t, type Key } from "../i18n";
+import { resolveSkin, type SkinChoice } from "../mascot/skins";
 
 type Size = "hidden" | "pill" | "open";
 
@@ -99,8 +100,25 @@ export function mountIsland(root: HTMLElement): void {
   // Progreso de AskUserQuestion: paso actual y elecciones por pregunta; se reinicia si cambia la tarjeta.
   let qCard: { id: string; step: number; picks: string[][] } | null = null;
   let openOnPending = true; // ajuste "Abrir la isla al llegar una solicitud"
+  let skinChoice: SkinChoice = "auto"; // ajuste "Disfraz"; la skin efectiva depende de la fecha
 
+  // Adornos de la skin halloween (styles.css los muestra solo con ella): detrás del contenido y sin clics.
   root.innerHTML = `
+    <div class="spooky" aria-hidden="true">
+      <div class="bat-track"><svg class="bat" viewBox="1 2 40 18">
+        <path class="wing wing-l" d="M16 12 Q9 3 2 8 Q5 11 5 16 Q9 13 11 18 Q14 17 16 19 Z"/>
+        <path class="wing wing-r" d="M26 12 Q33 3 40 8 Q37 11 37 16 Q33 13 31 18 Q28 17 26 19 Z"/>
+        <ellipse cx="21" cy="15" rx="5" ry="7"/>
+        <path d="M17.5 9 L18 3 L20.5 8 M24.5 9 L24 3 L21.5 8"/>
+        <circle cx="19" cy="13" r="1" fill="#FF8A1F"/><circle cx="23" cy="13" r="1" fill="#FF8A1F"/>
+      </svg></div>
+      <svg class="web" viewBox="0 0 40 40" fill="none" stroke="#fff" stroke-width=".6">
+        <path d="M0 40 L6 0 M0 40 L22 4 M0 40 L36 18 M0 40 L40 34"/>
+        <path d="M1.8 28 Q3.6 30.3 6.6 29.2 Q7.4 32.6 10.8 33.4 Q9.7 36.4 12 38.2 M3.6 16 Q7.1 20.6 13.2 18.4 Q14.8 25.2 21.6 26.8 Q19.4 32.9 24 36.4 M5.4 4 Q10.7 10.9 19.8 7.6 Q22.2 17.8 32.4 20.2 Q29.1 29.3 36 34.6"/>
+      </svg>
+      <svg class="ghost" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
+      <svg class="ghost g2" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
+    </div>
     <div class="pill">
       <pilas-mascot state="dormida"></pilas-mascot>
       <span class="badge" hidden></span>
@@ -331,16 +349,16 @@ export function mountIsland(root: HTMLElement): void {
     }
   });
 
-  // Abrir/cerrar va en la píldora y no en la pilita: chocaría con los 3 clics del mareo.
+  // La píldora alterna abrir/cerrar; la pilita solo abre, para no chocar con los 3 clics del mareo.
   root.querySelector(".pill")!.addEventListener("click", (e) => {
     if ((e.target as Element).closest("pilas-mascot")) return;
     open = !open;
     render();
   });
-  mascot.addEventListener("pilita-click", () => {
-    if (mascot.state !== "alerta") { play("toque"); return; } // en alerta no hay reacciones ni sonido de toque
-    open = !open;
-    render();
+  mascot.addEventListener("pilita-click", (e) => {
+    // En alerta no hay reacciones ni sonido; el 3er clic (mareo) suena distinto al toque.
+    if (mascot.state !== "alerta") play((e as CustomEvent).detail?.reaction === "mareo" ? "mareo" : "toque");
+    if (!open) { open = true; render(); }
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { open = false; render(); }
@@ -375,11 +393,20 @@ export function mountIsland(root: HTMLElement): void {
     }, 60_000);
   });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
-  // Ajustes: idioma, sonido y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
+  // Skin efectiva en la pilita, en la raíz (puntos de calabaza en styles.css) y en los sonidos.
+  function applySkin(): void {
+    const skin = resolveSkin(skinChoice, new Date());
+    mascot.skin = skin;
+    document.documentElement.dataset.skin = skin;
+    configure({ skin });
+  }
+  // Ajustes: idioma, sonido, disfraz y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
   function applySettings(s: api.Settings): void {
     setLang(s.lang);
     configure({ enabled: s.sound_enabled, volume: s.volume });
     openOnPending = s.open_on_pending;
+    skinChoice = s.skin;
+    applySkin();
     render();
   }
   api.getSettings().then(applySettings);
@@ -387,5 +414,7 @@ export function mountIsland(root: HTMLElement): void {
   api.getSnapshot().then((s) => { snap = s; render(); });
   // Refresca los "hace N min" mientras la lista está abierta.
   setInterval(() => { if (open) render(); }, 30_000);
+  // Cada hora, para que en Automático la temporada empiece y acabe sin reiniciar.
+  setInterval(applySkin, 3_600_000);
   render();
 }

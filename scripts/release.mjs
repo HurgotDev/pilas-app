@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Herramienta de releases: fragmentos de changelog en .changes/, versión y notas.
-// Uso: node scripts/release.mjs <prepare|check|notes <version>|version|
-//   latest <version> <firma.sig>|cask <version> <dmg>>
+// Usage: node scripts/release.mjs <prepare|check|notes <version>|version|
+//   latest <version> <signature.sig>|cask <version> <dmg>>
 import { execFileSync, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -9,28 +9,28 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const BUMPS = ["patch", "minor", "major"];
-const GROUPS = { major: "Cambios incompatibles", minor: "Novedades", patch: "Correcciones" };
+const GROUPS = { major: "Breaking changes", minor: "Added", patch: "Fixes and improvements" };
 
 // Devuelve { bump, body } o lanza un Error con el motivo.
 export function parseFragment(text) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
-  if (!m) throw new Error("falta el frontmatter (--- bump: ... ---)");
+  if (!m) throw new Error("missing frontmatter (--- bump: ... ---)");
   const bumpLine = /^bump:\s*(\S+)\s*(#.*)?$/m.exec(m[1]);
-  if (!bumpLine) throw new Error("falta 'bump:' en el frontmatter");
+  if (!bumpLine) throw new Error("missing 'bump:' in the frontmatter");
   const bump = bumpLine[1];
-  if (!BUMPS.includes(bump)) throw new Error(`bump inválido '${bump}' (usa ${BUMPS.join(" | ")})`);
+  if (!BUMPS.includes(bump)) throw new Error(`invalid bump '${bump}' (use ${BUMPS.join(" | ")})`);
   // El cuerpo se convierte en una sola viñeta.
   const body = m[2].trim().replace(/\s*\n\s*/g, " ");
-  if (!body) throw new Error("el cuerpo está vacío");
+  if (!body) throw new Error("the body is empty");
   return { bump, body };
 }
 
 export function nextVersion(current, bumps) {
   const parts = /^(\d+)\.(\d+)\.(\d+)$/.exec(current);
-  if (!parts) throw new Error(`versión actual inválida: ${current}`);
+  if (!parts) throw new Error(`invalid current version: ${current}`);
   let [major, minor, patch] = parts.slice(1).map(Number);
   const top = Math.max(...bumps.map((b) => BUMPS.indexOf(b)));
-  if (top < 0) throw new Error("no hay fragmentos");
+  if (top < 0) throw new Error("there are no fragments");
   // Se aplica literalmente aunque major sea 0: major lleva a 1.0.0.
   if (top === 2) [major, minor, patch] = [major + 1, 0, 0];
   else if (top === 1) [minor, patch] = [minor + 1, 0];
@@ -71,7 +71,7 @@ export function setJsonVersion(text, version) {
 
 export function setCargoVersion(text, version) {
   const re = /(\[workspace\.package\][^[]*?^version\s*=\s*")[^"]*"/m;
-  if (!re.test(text)) throw new Error("no se encontró version en [workspace.package] de Cargo.toml");
+  if (!re.test(text)) throw new Error("version not found in [workspace.package] of Cargo.toml");
   return text.replace(re, `$1${version}"`);
 }
 
@@ -89,8 +89,8 @@ export function buildLatest({ version, notes, pubDate, signature, url }) {
 
 // Rellena la plantilla del cask. La versión entra en Ruby: se valida antes.
 export function renderCask(template, { version, sha256 }) {
-  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`versión inválida: ${version}`);
-  if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("sha256 inválido");
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`invalid version: ${version}`);
+  if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("invalid sha256");
   return template.replaceAll("@VERSION@", version).replaceAll("@SHA256@", sha256);
 }
 
@@ -133,7 +133,7 @@ function cargoUpdate() {
 function prepare() {
   const { fragments, errors } = readFragments();
   if (errors.length) throw new Error(errors.join("\n"));
-  if (!fragments.length) throw new Error("no hay fragmentos en .changes/: nada que publicar");
+  if (!fragments.length) throw new Error("there are no fragments in .changes/: nothing to publish");
   const version = nextVersion(currentVersion(), fragments.map((f) => f.bump));
 
   write("src-tauri/tauri.conf.json", setJsonVersion(read("src-tauri/tauri.conf.json"), version));
@@ -154,7 +154,7 @@ function prepare() {
 function changelogSection(version) {
   const changelog = fs.existsSync(file("CHANGELOG.md")) ? read("CHANGELOG.md") : "";
   const body = extractSection(changelog, version);
-  if (body === null) throw new Error(`CHANGELOG.md no tiene una sección para ${version}`);
+  if (body === null) throw new Error(`CHANGELOG.md has no section for ${version}`);
   return body;
 }
 
@@ -164,17 +164,17 @@ function main([cmd, ...args]) {
   if (cmd === "check") {
     const { fragments, errors } = readFragments();
     if (errors.length) throw new Error(errors.join("\n"));
-    return console.log(`${fragments.length} fragmento(s) válido(s)`);
+    return console.log(`${fragments.length} valid fragment(s)`);
   }
   if (cmd === "notes") {
-    if (!args[0]) throw new Error("uso: release.mjs notes <version>");
+    if (!args[0]) throw new Error("usage: release.mjs notes <version>");
     return console.log(changelogSection(args[0]));
   }
   if (cmd === "latest") {
     const [version, sigPath] = args;
-    if (!version || !sigPath) throw new Error("uso: release.mjs latest <version> <firma.sig>");
+    if (!version || !sigPath) throw new Error("usage: release.mjs latest <version> <signature.sig>");
     const signature = fs.readFileSync(sigPath, "utf8").trim();
-    if (!signature) throw new Error(`firma vacía: ${sigPath}`);
+    if (!signature) throw new Error(`empty signature: ${sigPath}`);
     const url = `https://github.com/HurgotDev/pilas-app/releases/download/v${version}/Pilas_universal.app.tar.gz`;
     const pubDate = new Date().toISOString();
     const notes = changelogSection(version);
@@ -182,12 +182,12 @@ function main([cmd, ...args]) {
   }
   if (cmd === "cask") {
     const [version, dmg] = args;
-    if (!version || !dmg) throw new Error("uso: release.mjs cask <version> <dmg>");
+    if (!version || !dmg) throw new Error("usage: release.mjs cask <version> <dmg>");
     const sha256 = crypto.createHash("sha256").update(fs.readFileSync(dmg)).digest("hex");
     const template = read("packaging/homebrew/pilas.rb.tmpl");
     return console.log(renderCask(template, { version, sha256 }));
   }
-  throw new Error("uso: release.mjs <prepare|check|notes <version>|version|latest <version> <firma.sig>|cask <version> <dmg>>");
+  throw new Error("usage: release.mjs <prepare|check|notes <version>|version|latest <version> <signature.sig>|cask <version> <dmg>>");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

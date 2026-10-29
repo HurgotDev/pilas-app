@@ -35,12 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Comprueba la clave de firma del updater
+      - name: Check the updater signing key
         env:
           SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           if [ -z "$SIGNING_KEY" ]; then
-            echo "::error::Falta el secreto TAURI_SIGNING_PRIVATE_KEY: sin él no se firman las actualizaciones. Ver docs/RELEASING.md."
+            echo "::error::Missing secret TAURI_SIGNING_PRIVATE_KEY: updates cannot be signed without it. See docs/RELEASING.md."
             exit 1
           fi
 
@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Renderiza el cask con el dmg publicado
+      - name: Render the cask with the published dmg
         env:
           VERSION: ${{ needs.check.outputs.version }}
         run: |
@@ -137,13 +137,13 @@ jobs:
           node scripts/release.mjs cask "$VERSION" Pilas.dmg > pilas.rb
           ruby -c pilas.rb
 
-      - name: Publica el cask en homebrew-tap
+      - name: Publish the cask to homebrew-tap
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.check.outputs.version }}
         run: |
           if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
-            echo "::warning::Falta el secreto HOMEBREW_TAP_TOKEN: el cask no se actualiza en homebrew-tap."
+            echo "::warning::Missing secret HOMEBREW_TAP_TOKEN: the cask is not updated in homebrew-tap."
             exit 0
           fi
           git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/HurgotDev/homebrew-tap.git" tap
@@ -159,3 +159,44 @@ jobs:
           fi
           git commit -m "Update pilas cask to $VERSION"
           git push origin HEAD:main
+
+  # Back-merge main -> develop por PR. Solo corre tras un release real (needs
+  # release con éxito). Usa BACKMERGE_TOKEN: los PRs abiertos con GITHUB_TOKEN
+  # no disparan CI y el check policy nunca correría.
+  backmerge:
+    needs: [check, release]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.BACKMERGE_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Back-merge main into develop
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::Missing secret BACKMERGE_TOKEN: main is not back-merged into develop after $VERSION. See docs/RELEASING.md."
+            exit 0
+          fi
+          git fetch --quiet origin main develop
+          if git merge-base --is-ancestor origin/main origin/develop; then
+            echo "develop already contains main: nothing to back-merge."
+            exit 0
+          fi
+          pr=$(gh pr list --base develop --head main --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            body="Automatic back-merge after release $VERSION.
+
+          Merge it with a merge commit, not a squash, so develop keeps the
+          release commits from main."
+            url=$(gh pr create --base develop --head main \
+              --title "Back-merge main into develop after $VERSION" --body "$body")
+            pr=$(gh pr view "$url" --json number --jq .number)
+          fi
+          # Se fusiona cuando el repo lo permita (Allow auto-merge) y pasen los checks.
+          gh pr merge "$pr" --auto --merge
