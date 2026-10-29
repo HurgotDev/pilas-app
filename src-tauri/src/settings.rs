@@ -18,6 +18,8 @@ pub struct Settings {
     /// `None` = idioma del sistema.
     pub lang: Option<String>,
     pub onboarded: bool,
+    /// Busca actualizaciones al arrancar y cada 24 h (ver `updates.rs`).
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
@@ -30,6 +32,7 @@ impl Default for Settings {
             launch_at_login: true,
             lang: None,
             onboarded: false,
+            check_updates: true,
         }
     }
 }
@@ -80,13 +83,20 @@ fn plist_xml(exe: &str) -> String {
     )
 }
 
+/// ¿Corre desde un .app empaquetado? En `tauri dev` el binario vive en target/.
+pub fn in_app_bundle() -> bool {
+    std::env::current_exe()
+        .map(|e| e.to_string_lossy().contains(".app/Contents/MacOS/"))
+        .unwrap_or(false)
+}
+
 /// Escribe o quita `~/Library/LaunchAgents/dev.pilas.app.plist` según `enabled`.
 #[cfg(target_os = "macos")]
 pub fn sync_launch_agent(enabled: bool) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe = exe.to_string_lossy();
     // En desarrollo el binario no vive en un .app: no tocamos el LaunchAgent del usuario.
-    if !exe.contains(".app/Contents/MacOS/") {
+    if !in_app_bundle() {
         return Ok(());
     }
     let plist = launch_agent_path()?;
@@ -127,6 +137,7 @@ mod tests {
         assert_eq!(s.volume, 0.2);
         assert!(s.sound_enabled);
         assert!(!s.onboarded);
+        assert!(s.check_updates);
         assert_eq!(s.screen, ScreenChoice::Main);
     }
 }

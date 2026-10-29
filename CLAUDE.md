@@ -33,7 +33,8 @@ npm run dev                                  # solo la UI; playground de la pili
 2. **Nada se aprueba solo.** No hay timeouts ni modos que aprueben. "Siempre" solo reenvía las
    `permission_suggestions` de Claude Code, nunca reglas inventadas.
 3. **Una decisión solo va a su solicitud.** Se entrega por `request_id` exacto; si el hook se fue, se descarta.
-4. **Sin red.** La app no abre puertos TCP ni hace peticiones externas. Socket Unix con permisos 0600.
+4. **Sin red.** La app no abre puertos TCP ni hace peticiones externas, salvo la búsqueda de
+   actualizaciones (`latest.json` de GitHub Releases, desactivable en Ajustes). Socket Unix con permisos 0600.
 5. **El hook es tonto.** Reenvía el payload íntegro; toda interpretación vive en `pilas-core`, con tests.
 6. **Minimalismo.** Si algo no está en `docs/SPEC.md` → "Alcance v1", no se agrega sin preguntar.
 
@@ -46,9 +47,10 @@ npm run dev                                  # solo la UI; playground de la pili
   ya fijados (estados `dormida`, `cargando`, `alerta`, `llena`; reacciones `saludo`, `aplastada`, `mareo`).
 - Los tipos de `ui/src/island/api.ts` deben reflejar `Snapshot` de `src-tauri/src/lib.rs`: si cambias uno, cambia el otro.
 - Antes de tocar el contrato con Claude Code, verifica en https://code.claude.com/docs/en/hooks y añade un test en `pilas-core`.
+- Ramas: `feat/*`/`fix/*` desde `develop` con un fragmento en `.changes/`; `develop` o `hotfix/*` → `main` es un release (ver `docs/RELEASING.md`).
 - Commits pequeños y en español, en imperativo: "Añade la tarjeta de preguntas".
-
-## Estado inicial (importante)
-
-El esqueleto se generó sin compilar Rust (no había toolchain). Lo primero es la tarea M0 de `docs/PLAN.md`:
-`cargo check --workspace`, corregir lo que falle y dejar los tests en verde. El frontend sí compila.
+- Pull requests en inglés: título, descripción y comentarios (sigue `.github/pull_request_template.md`).
+- `README.md` siempre al día: si un cambio altera lo que el usuario instala, configura, ve o usa
+  (funciones, ajustes, textos de la interfaz que cita el README, requisitos, privacidad) o los comandos
+  de desarrollo, actualiza el README en el mismo PR. Antes de abrir un PR, relee el README y confirma
+  que nada quedó desfasado; si no aplica, dilo en la casilla de la plantilla del PR.

@@ -5,11 +5,37 @@ la terminal correcta sin cambiar de ventana.
 
 ![La pilita](assets/icon.png)
 
-> En desarrollo. Ver `docs/SPEC.md` para el alcance de la v1 y `docs/PLAN.md` para el avance.
+La última versión está en
+[GitHub Releases](https://github.com/HurgotDev/pilas-app/releases). El
+alcance de la v1 está en `docs/SPEC.md` y el avance en `docs/PLAN.md`.
+
+## Qué hace
+
+- Una isla en el notch (o en el borde superior de la pantalla) con la
+  pilita, que cambia de estado: dormida, cargando, alerta y llena.
+- Lista de sesiones de Claude Code con su estado y última acción.
+- Aprobar permisos (**Allow**, **Deny**, **Always**) y responder las
+  preguntas de Claude Code sin cambiar de ventana, o devolverlas a la
+  terminal.
+- Un clic en una sesión salta a su pestaña exacta de Ghostty; con otras
+  terminales, trae la app al frente.
+- Sonidos 8-bit opcionales, interfaz en inglés y español.
+
+Privacidad: sin cuentas ni telemetría. La única conexión a internet es la
+búsqueda de actualizaciones, que se puede desactivar.
 
 ## Instalación
 
 Pilas es para macOS 13 o superior.
+
+Con Homebrew (recomendado). El cask quita la marca de cuarentena por ti, así
+que no hace falta `xattr`:
+
+```bash
+brew install --cask hurgotdev/tap/pilas
+```
+
+O descarga el `.dmg`:
 
 1. Descarga el `.dmg` de la última versión en
    [GitHub Releases](https://github.com/HurgotDev/pilas-app/releases).
@@ -35,6 +61,11 @@ En el primer arranque se abre el onboarding, que instala los hooks en Claude
 Code. Después, el icono de la pilita en la barra de menú da acceso a
 **Settings…** (Ajustes).
 
+Pilas busca actualizaciones al arrancar y cada 24 horas, y avisa en el
+menú de la barra y en Ajustes. No instala nada sin que lo pidas. Para
+desactivar la búsqueda, quita la casilla **Check for updates
+automatically** (Buscar actualizaciones automáticamente) en **Settings…**.
+
 Para desinstalar, abre **Settings…** y pulsa **Disconnect** (Desconectar) para
 quitar los hooks de `~/.claude/settings.json`. Luego borra `Pilas.app` y la
 carpeta `~/Library/Application Support/Pilas`.
@@ -49,24 +80,24 @@ carpeta `~/Library/Application Support/Pilas`.
 ```bash
 npm install
 npm run app          # abre Pilas en modo desarrollo
-cargo test --workspace --exclude pilas
+npm run build        # la app necesita dist/ para compilar y pasar tests
+cargo clippy --workspace -- -D warnings
+cargo test --workspace
+npm run typecheck && npm run test:scripts
 ```
 
 Para probar los hooks sin afectar tus propias sesiones de Claude Code, sigue `docs/HOOKS-DEV.md`.
 
+## Contribuir
+
+Crea tu rama (`feat/<slug>` o `fix/<slug>`) desde `develop`, añade un
+fragmento en `.changes/` (ver `.changes/README.md`) y abre el PR a `develop`.
+
 ## Publicar una versión
 
-Para quien mantiene el proyecto:
-
-1. Sube `version` en `src-tauri/tauri.conf.json` y en `Cargo.toml` (sección
-   `[workspace.package]`). Deben coincidir con la etiqueta.
-2. Crea y sube la etiqueta: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. El workflow `.github/workflows/release.yml` compila el `.dmg` universal
-   (Apple Silicon e Intel) y crea un release **borrador** con el `.dmg`.
-4. Revisa las notas, y publica el release desde GitHub.
-
-Para probar el workflow sin crear una etiqueta, lánzalo a mano desde la
-pestaña Actions: en lugar de un release, deja el `.dmg` como artefacto.
+Cada PR fusionado en `main` publica una versión automáticamente. El proceso
+completo (ramas, changelog, releases y hotfixes) está en
+`docs/RELEASING.md`.
 
 ## Licencia
 

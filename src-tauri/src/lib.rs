@@ -8,6 +8,7 @@ mod hooks;
 mod panel;
 mod server;
 mod settings;
+mod updates;
 
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
@@ -47,6 +48,8 @@ pub(crate) struct Inner {
     /// Sesión → id de terminal de Ghostty, guardado tras un salto exacto.
     // shortcut: las entradas de sesiones terminadas no se borran, son pocos bytes; limpiar si crece
     pub terminal_ids: HashMap<String, String>,
+    /// Última versión nueva encontrada (`None` = al día o sin comprobar).
+    pub update: Option<updates::UpdateInfo>,
 }
 
 #[derive(Default)]
@@ -380,13 +383,19 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     // shortcut: etiquetas en inglés porque el backend no tiene i18n; traducir cuando haya más textos nativos
     let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit Pilas", true, None::<&str>)?;
+    // "Update to X…" se inserta arriba en updates::publish cuando hay versión nueva.
+    let update_item = MenuItem::with_id(app, "update", "Update…", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
+    app.manage(updates::UpdateMenu {
+        menu: menu.clone(),
+        item: update_item,
+    });
     TrayIconBuilder::new()
         .icon(tray_icon())
         .menu(&menu)
         .icon_as_template(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "settings" => {
+            "settings" | "update" => {
                 let _ = open_settings_window(app);
             }
             "quit" => app.exit(0),
@@ -399,6 +408,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory); // sin ícono en el Dock
@@ -416,6 +426,9 @@ pub fn run() {
             server::start(app.handle().clone())?;
             spawn_prune(app.handle().clone());
             setup_tray(app.handle())?;
+            // Recopia el hook si la app trae una versión nueva (no toca settings.json).
+            std::thread::spawn(hooks::refresh_hook);
+            updates::spawn_checks(app.handle().clone());
 
             // Oferta de reparación al arrancar: primera vez, o hooks que no están bien.
             if !settings.onboarded || hooks::info().status != "ok" {
@@ -435,7 +448,10 @@ pub fn run() {
             hooks_status,
             preview_hooks,
             apply_hooks,
-            open_settings
+            open_settings,
+            updates::update_status,
+            updates::check_updates_now,
+            updates::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Pilas");
