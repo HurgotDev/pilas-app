@@ -1,104 +1,107 @@
 # Pilas
 
-La pilita del notch que te avisa cuando Claude Code te necesita. Aprueba permisos, responde preguntas y salta a
-la terminal correcta sin cambiar de ventana.
+The little pilita on the notch that tells you when Claude Code needs you.
+Approve permissions, answer questions and jump to the right terminal without
+switching windows.
 
-![La pilita](assets/icon.png)
+<p align="center"><img src="assets/icon.png" alt="Pilita, the Pilas mascot" width="160"></p>
 
-La última versión está en
-[GitHub Releases](https://github.com/HurgotDev/pilas-app/releases). El
-alcance de la v1 está en `docs/SPEC.md` y el avance en `docs/PLAN.md`.
+The latest version is on
+[GitHub Releases](https://github.com/HurgotDev/pilas-app/releases). The scope
+of v1 is in `docs/SPEC.md` and the progress in `docs/PLAN.md` (both in
+Spanish).
 
-## Qué hace
+## What it does
 
-- Una isla en el notch (o en el borde superior de la pantalla) con la
-  pilita, que cambia de estado: dormida, cargando, alerta y llena.
-- Lista de sesiones de Claude Code con su estado y última acción.
-- Aprobar permisos (**Allow**, **Deny**, **Always**) y responder las
-  preguntas de Claude Code sin cambiar de ventana, o devolverlas a la
+- An island on the notch (or on the top edge of the screen) with the pilita,
+  which changes state: asleep, loading, alert and full.
+- A list of Claude Code sessions with their status and last action.
+- Approve permissions (**Allow**, **Deny**, **Always**) and answer Claude
+  Code's questions without switching windows, or send them back to the
   terminal.
-- Un clic en una sesión salta a su pestaña exacta de Ghostty; con otras
-  terminales, trae la app al frente.
-- Sonidos 8-bit opcionales, interfaz en inglés y español.
+- Click a session to jump to its exact Ghostty tab; with other terminals, it
+  brings the app to the front.
+- Optional 8-bit sounds; interface in English and Spanish.
 
-Privacidad: sin cuentas ni telemetría. La única conexión a internet es la
-búsqueda de actualizaciones, que se puede desactivar.
+Privacy: no accounts and no telemetry. The only internet connection is the
+update check, which can be turned off.
 
-## Instalación
+## Installation
 
-Pilas es para macOS 13 o superior.
+Pilas is for macOS 13 or later.
 
-Con Homebrew (recomendado). El cask quita la marca de cuarentena por ti, así
-que no hace falta `xattr`:
+With Homebrew (recommended). The cask removes the quarantine flag for you, so
+you don't need `xattr`:
 
 ```bash
 brew install --cask hurgotdev/tap/pilas
 ```
 
-O descarga el `.dmg`:
+Or download the `.dmg`:
 
-1. Descarga el `.dmg` de la última versión en
+1. Download the `.dmg` of the latest version from
    [GitHub Releases](https://github.com/HurgotDev/pilas-app/releases).
-2. Abre el `.dmg` y arrastra **Pilas** a **Applications**.
+2. Open the `.dmg` and drag **Pilas** to **Applications**.
 
-Pilas no está firmada ni notarizada, así que macOS la bloqueará la primera
-vez. Hay dos formas de permitirla:
+Pilas is not signed or notarized, so macOS will block it the first time. There
+are two ways to allow it:
 
-- En Terminal (recomendado):
+- In Terminal (recommended):
 
   ```bash
   xattr -dr com.apple.quarantine /Applications/Pilas.app
   ```
 
-  Quita la marca de cuarentena de la app y también del binario `pilas-hook`
-  que incluye, antes de que Pilas lo copie a su carpeta de datos.
+  This removes the quarantine flag from the app and from the `pilas-hook`
+  binary it includes, before Pilas copies it to its data folder.
 
-- En **Ajustes del Sistema → Privacidad y seguridad**, pulsa **Abrir de todas
-  formas** tras el primer intento. En versiones recientes de macOS, clic
-  derecho → Abrir ya no salta este bloqueo.
+- In **System Settings → Privacy & Security**, click **Open Anyway** after the
+  first attempt. In recent versions of macOS, right-click → Open no longer
+  bypasses this block.
 
-En el primer arranque se abre el onboarding, que instala los hooks en Claude
-Code. Después, el icono de la pilita en la barra de menú da acceso a
-**Settings…** (Ajustes).
+On first launch, the onboarding opens and installs the hooks in Claude Code.
+After that, the pilita icon in the menu bar gives you access to **Settings…**.
 
-Pilas busca actualizaciones al arrancar y cada 24 horas, y avisa en el
-menú de la barra y en Ajustes. No instala nada sin que lo pidas. Para
-desactivar la búsqueda, quita la casilla **Check for updates
-automatically** (Buscar actualizaciones automáticamente) en **Settings…**.
+Pilas checks for updates at startup and every 24 hours, and tells you in the
+menu bar and in Settings. It does not install anything unless you ask it to.
+To turn off the check, clear **Check for updates automatically** in
+**Settings…**.
 
-Para desinstalar, abre **Settings…** y pulsa **Disconnect** (Desconectar) para
-quitar los hooks de `~/.claude/settings.json`. Luego borra `Pilas.app` y la
-carpeta `~/Library/Application Support/Pilas`.
+To uninstall, open **Settings…** and click **Disconnect** to remove the hooks
+from `~/.claude/settings.json`. Then delete `Pilas.app` and the folder
+`~/Library/Application Support/Pilas`.
 
-## Requisitos para desarrollar
+## Requirements for development
 
-- macOS 13 o superior, Xcode Command Line Tools (`xcode-select --install`)
-- Rust estable (`curl https://sh.rustup.rs -sSf | sh`)
-- Node 20 o superior
-- Claude Code y Ghostty ≥ 1.3 para probar de punta a punta
+- macOS 13 or later, Xcode Command Line Tools (`xcode-select --install`)
+- Stable Rust (`curl https://sh.rustup.rs -sSf | sh`)
+- Node 20 or later
+- Claude Code and Ghostty ≥ 1.3 to test end to end
 
 ```bash
 npm install
-npm run app          # abre Pilas en modo desarrollo
-npm run build        # la app necesita dist/ para compilar y pasar tests
+npm run app          # opens Pilas in development mode
+npm run build        # the app needs dist/ to compile and pass tests
 cargo clippy --workspace -- -D warnings
 cargo test --workspace
 npm run typecheck && npm run test:scripts
 ```
 
-Para probar los hooks sin afectar tus propias sesiones de Claude Code, sigue `docs/HOOKS-DEV.md`.
+To test the hooks without affecting your own Claude Code sessions, follow
+`docs/HOOKS-DEV.md` (in Spanish).
 
-## Contribuir
+## Contributing
 
-Crea tu rama (`feat/<slug>` o `fix/<slug>`) desde `develop`, añade un
-fragmento en `.changes/` (ver `.changes/README.md`) y abre el PR a `develop`.
+Create your branch (`feat/<slug>` or `fix/<slug>`) from `develop`, add a
+fragment in `.changes/` (see `.changes/README.md`) and open the PR into
+`develop`.
 
-## Publicar una versión
+## Publishing a version
 
-Cada PR fusionado en `main` publica una versión automáticamente. El proceso
-completo (ramas, changelog, releases y hotfixes) está en
-`docs/RELEASING.md`.
+Merging a release PR into `main` publishes a version automatically. The full
+process (branches, changelog, releases and hotfixes) is in
+`docs/RELEASING.md` (in Spanish).
 
-## Licencia
+## License
 
-MIT. Ver `LICENSE`.
+MIT. See `LICENSE`.
