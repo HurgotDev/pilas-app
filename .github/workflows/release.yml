@@ -160,12 +160,14 @@ jobs:
           git commit -m "Update pilas cask to $VERSION"
           git push origin HEAD:main
 
-  # Back-merge main -> develop por PR. Solo corre tras un release real (needs
-  # release con éxito). Usa BACKMERGE_TOKEN: los PRs abiertos con GITHUB_TOKEN
-  # no disparan CI y el check policy nunca correría.
+  # Back-merge main -> develop por PR. Corre tras un release con éxito o
+  # cuando no hubo release (la etiqueta ya existía). Usa BACKMERGE_TOKEN: los
+  # PRs abiertos con GITHUB_TOKEN no disparan CI y el check policy nunca correría.
   backmerge:
     needs: [check, release]
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' && !failure() && !cancelled() &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.BACKMERGE_TOKEN }}
@@ -190,12 +192,12 @@ jobs:
           pr=$(gh pr list --base develop --head main --state open \
             --json number --jq '.[0].number // empty')
           if [ -z "$pr" ]; then
-            body="Automatic back-merge after release $VERSION.
+            body="Automatic back-merge of main ($VERSION).
 
           Merge it with a merge commit, not a squash, so develop keeps the
           release commits from main."
             url=$(gh pr create --base develop --head main \
-              --title "Back-merge main into develop after $VERSION" --body "$body")
+              --title "Back-merge main into develop ($VERSION)" --body "$body")
             pr=$(gh pr view "$url" --json number --jq .number)
           fi
           # Se fusiona cuando el repo lo permita (Allow auto-merge) y pasen los checks.

@@ -75,11 +75,13 @@ jobs:
               head_version=$(node scripts/release.mjs version)
               main_version=$(git show origin/main:src-tauri/tauri.conf.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
               highest=$(printf '%s\n%s\n' "$main_version" "$head_version" | sort -V | tail -n1)
-              if [ "$head_version" = "$main_version" ] || [ "$highest" != "$head_version" ]; then
-                echo "::error::Version $head_version must be greater than main's $main_version. Run 'npm run release:prepare'."
+              # Misma versión: solo fragmentos "none", no se publica release.
+              if [ "$head_version" = "$main_version" ]; then
+                echo "::notice::Version unchanged ($head_version): merging will not publish a release."
+              elif [ "$highest" != "$head_version" ]; then
+                echo "::error::Version $head_version must not be lower than main's $main_version. Run 'npm run release:prepare'."
                 fail=1
-              fi
-              if ! node scripts/release.mjs notes "$head_version" > /dev/null 2>&1; then
+              elif ! node scripts/release.mjs notes "$head_version" > /dev/null 2>&1; then
                 echo "::error::CHANGELOG.md has no section for $head_version."
                 fail=1
               fi

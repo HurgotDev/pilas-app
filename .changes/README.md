@@ -9,13 +9,15 @@ Format:
 
 ```
 ---
-bump: minor   # patch | minor | major
+bump: minor   # none | patch | minor | major
 ---
 Add the hook installer with backup and diff.
 ```
 
 - `bump`: `patch` for fixes, `minor` for new features, `major` for breaking
-  changes. The highest bump across all fragments wins.
+  changes. The highest bump across all fragments wins. `none` means no new
+  version (docs, README, CI): it stays out of the changelog, and if every
+  fragment is `none` the release keeps the current version.
 - Body: one sentence in English, in the imperative. It becomes a bullet in the
   changelog.
 
