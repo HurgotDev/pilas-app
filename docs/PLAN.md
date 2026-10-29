@@ -1,5 +1,8 @@
 # Plan de desarrollo de la v1
 
+Estado: v1 completa (publicada en v0.3.0). El siguiente alcance está por
+definir.
+
 Cada hito termina con algo que se puede probar a mano. El orden ataca primero el riesgo más alto
 (la ventana sobre el notch). Los criterios de aceptación finales están en `docs/SPEC.md`.
 
@@ -11,9 +14,8 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 ## M1 · La isla en su sitio (riesgo alto: hacerlo primero)
 - [x] Convertir la ventana en `NSPanel`: nivel por encima de la barra de menú, en todos los Spaces, sin robar foco.
       Evaluar `tauri-nspanel` (comunidad) y, si no basta, un módulo propio con `objc2`.
-- [ ] Posicionar sobre el notch de la pantalla del MacBook; en un monitor externo principal, centrada bajo la barra de menú.
-- [ ] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
-      Pendiente: probar con monitor externo y la recolocación; con notch ya funciona.
+- [x] Posicionar sobre el notch de la pantalla del MacBook; en un monitor externo principal, centrada bajo la barra de menú.
+- [x] Ajuste de pantalla (principal / la del notch / una concreta) y recolocar al conectar o desconectar monitores.
 - [x] Click-through fuera de la píldora y área de hover de 6 px cuando está oculta.
 - [x] Transición fluida de píldora a abierta y vuelta (ancho y alto animados
       en CSS; la ventana nativa crece antes y encoge después).
@@ -70,8 +72,8 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 - [x] `tauri-plugin-updater`: ajuste "Buscar actualizaciones" (sí por
   defecto), búsqueda al arrancar y cada 24 h, aviso en el menú y en Ajustes,
   instalar y reiniciar solo a petición.
-- [ ] Release: artefactos firmados del updater y `latest.json` en cada versión.
-- [ ] Cask en `HurgotDev/homebrew-tap` actualizado por el workflow de release.
+- [x] Release: artefactos firmados del updater y `latest.json` en cada versión.
+- [x] Cask en `HurgotDev/homebrew-tap` actualizado por el workflow de release.
 
 ## M10 · Skins de temporada (ver `docs/SPEC.md` → "Skins")
 
