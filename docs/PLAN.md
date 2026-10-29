@@ -109,3 +109,9 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
   - Hecho: `README.md` (ajuste nuevo), `.changes/seasonal-skins.md`
     (`bump: minor`), casillas marcadas.
   - Verificar: releer el README; todos los comandos de T1 en verde.
+- [ ] T6 · Contador oculto en 0 y ambiente Halloween en la isla.
+  - Hecho: `.badge[hidden]` no se ve (bug previo); badge de calabaza
+    naranja; murciélago que cruza la isla (sale de la pilita); resplandor,
+    telaraña, fantasmitas y acentos naranja según `docs/SPEC.md` → Skins.
+  - Verificar: render a tamaño real de píldora e isla abierta en ambas
+    skins; `npm run typecheck`, `npm run build`.

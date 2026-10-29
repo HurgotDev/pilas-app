@@ -187,15 +187,27 @@ pilita vuelve sola a la clásica sin reiniciar la app.
 
 - **Pilita**: `<pilas-mascot skin="halloween">` (sin atributo o `classic` =
   la de siempre). Sombrero de bruja sobre el borne, dentro del `rig`, así que
-  respira, flota, se aplasta y se marea con ella. Un murciélago pequeño
-  revolotea cerca, fuera del cuerpo, y no se solapa con "z", exclamación ni
-  destellos. Los LEDs encendidos pasan a naranja calabaza. Con
-  `prefers-reduced-motion`, el murciélago queda quieto. El disfraz completo se
-  ve dentro de la píldora de 28 px sin recortarse; se aplica a todas las
-  pilitas (píldora, isla abierta, onboarding y menú).
+  respira, flota, se aplasta y se marea con ella. Los LEDs encendidos pasan a
+  naranja calabaza. El disfraz completo se ve dentro de la píldora de 28 px
+  sin recortarse; se aplica a todas las pilitas (píldora, isla abierta y
+  onboarding).
 - **Punto de estado** (filas de la lista de sesiones): silueta de calabaza
   pintada con el mismo color de estado de hoy; misma alineación y área de
   clic.
+- **Contador de pendientes** (badge de la píldora): calabaza naranja con el
+  número encima. Con 0 pendientes no se ve, en cualquier skin.
+- **Ambiente de la isla** (píldora y abierta), siempre detrás del contenido,
+  sin recibir clics y sin tapar texto ni botones:
+  - Un murciélago cruza la isla de lado a lado en bucle, revoloteando.
+    Sustituye al murciélago que iba junto a la pilita.
+  - Resplandor naranja tenue en el borde inferior.
+  - Telaraña fina en una esquina inferior de la isla abierta.
+  - Uno o dos fantasmitas semitransparentes suben y se desvanecen de vez en
+    cuando en la isla abierta.
+  - Acentos naranja: separadores, enlaces y anillo de foco.
+  - No cambian: los colores de estado ni Permitir/Denegar.
+  - Con `prefers-reduced-motion` no hay murciélago volando ni fantasmas.
+  - Solo CSS (y SVG en línea): sin temporizadores de JS ni imágenes externas.
 - **Sonidos**: variantes "spooky" de Alerta, Listo, Toque y Mareo, con la
   misma forma de onda 8-bit, una duración parecida (±20 %) y el mismo
   volumen. Mareo cambia los pajaritos por murciélagos: chillidos agudos y
@@ -237,8 +249,9 @@ pilita vuelve sola a la clásica sin reiniciar la app.
 
 - Siempre: color de estado intacto; textos vía `t()`; `npm run typecheck`,
   `cargo clippy --workspace -- -D warnings` y los tests en verde.
-- Preguntar antes: otra skin, cambiar la ventana de fechas, tocar la isla
-  más allá del punto de estado, añadir una dependencia o un runner de tests.
+- Preguntar antes: otra skin, cambiar la ventana de fechas, más adornos en
+  la isla de los descritos arriba, añadir una dependencia o un runner de
+  tests.
 - Nunca: descargar skins o assets, cambiar el comportamiento por la skin,
   sonidos en bucle, cambiar los colores de estado.
 
