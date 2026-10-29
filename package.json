@@ -1,7 +1,7 @@
 {
   "name": "pilas-app",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "app": "tauri dev",
     "release:prepare": "node scripts/release.mjs prepare",
     "test:scripts": "node --test scripts/release.test.mjs",
-    "test:ui": "node --test ui/src/mascot/skins.test.ts"
+    "test:ui": "node --test ui/src/skins/skins.test.ts ui/src/skins/christmas/snowman.test.ts"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",

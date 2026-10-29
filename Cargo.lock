@@ -2346,7 +2346,7 @@ dependencies = [
 
 [[package]]
 name = "pilas"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "block2",
  "libc",
@@ -2364,7 +2364,7 @@ dependencies = [
 
 [[package]]
 name = "pilas-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2373,7 +2373,7 @@ dependencies = [
 
 [[package]]
 name = "pilas-hook"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "libc",
  "pilas-core",
@@ -2383,7 +2383,7 @@ dependencies = [
 
 [[package]]
 name = "pilas-jump"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde_json",
  "thiserror 2.0.21",

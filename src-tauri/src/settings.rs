@@ -12,6 +12,7 @@ use std::path::PathBuf;
 pub enum Skin {
     Classic,
     Halloween,
+    Christmas,
     #[default]
     #[serde(other)]
     Auto,
@@ -31,7 +32,7 @@ pub struct Settings {
     pub onboarded: bool,
     /// Busca actualizaciones al arrancar y cada 24 h (ver `updates.rs`).
     pub check_updates: bool,
-    /// Disfraz de temporada; `Auto` cambia según la fecha local (ver `ui/src/mascot/skins.ts`).
+    /// Disfraz de temporada; `Auto` cambia según la fecha local (ver `ui/src/skins/index.ts`).
     pub skin: Skin,
 }
 
@@ -171,9 +172,31 @@ mod tests {
             (Skin::Auto, "auto"),
             (Skin::Classic, "classic"),
             (Skin::Halloween, "halloween"),
+            (Skin::Christmas, "christmas"),
         ] {
             assert_eq!(serde_json::to_value(skin).unwrap(), json!(text));
             assert_eq!(serde_json::from_value::<Skin>(json!(text)).unwrap(), skin);
         }
+    }
+
+    #[test]
+    fn ids_de_la_ui_coinciden_con_el_enum() {
+        // Lista compartida con el registro de skins de la UI (ui/src/skins/index.ts).
+        let ids: Vec<String> = serde_json::from_str(include_str!("../../ui/src/skins/ids.json")).unwrap();
+        let mut seen = Vec::new();
+        for id in &ids {
+            let skin: Skin = serde_json::from_value(json!(id)).unwrap();
+            assert_ne!(skin, Skin::Auto, "{id} no es una variante de Skin");
+            assert_eq!(serde_json::to_value(skin).unwrap(), json!(id));
+            assert!(!seen.contains(&skin), "{id} repetido");
+            seen.push(skin);
+        }
+        // Match exhaustivo: una variante nueva no compila hasta contarla aquí.
+        let non_auto = |s: Skin| match s {
+            Skin::Classic | Skin::Halloween | Skin::Christmas => 1,
+            Skin::Auto => 0,
+        };
+        let variants = [Skin::Classic, Skin::Halloween, Skin::Christmas, Skin::Auto];
+        assert_eq!(ids.len(), variants.into_iter().map(non_auto).sum::<usize>());
     }
 }

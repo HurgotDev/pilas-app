@@ -1,6 +1,7 @@
 // Puente con el backend de Tauri. Los tipos reflejan `Snapshot` en src-tauri/src/lib.rs.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { SkinChoice } from "../skins/index.ts";
 
 export type SessionState = "en_espera" | "trabajando" | "pendiente" | "error";
 export type MascotState = "dormida" | "cargando" | "alerta";
@@ -66,8 +67,8 @@ export interface Settings {
   lang: "en" | "es" | null; // null = idioma del sistema
   onboarded: boolean;
   check_updates: boolean;
-  /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/mascot/skins.ts`). */
-  skin: "auto" | "classic" | "halloween";
+  /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/skins/index.ts`). */
+  skin: SkinChoice;
 }
 
 export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";
