@@ -97,7 +97,7 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     de Alerta, Listo, Toque y Mareo (murciélagos); el resto cae en la
     clásica; duración ±20 %.
   - Verificar: `npm run typecheck`; a oído desde el playground.
-- [ ] T4 · Conectar la skin en la app.
+- [x] T4 · Conectar la skin en la app.
   - Hecho: selector "Costume"/"Disfraz" en `ui/src/settings.ts` +
     `ui/src/i18n.ts`; `ui/src/island/island.ts` resuelve la skin al
     arrancar, al cambiar el ajuste y cada hora, la pone en todas las
@@ -105,7 +105,7 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     calabaza en `ui/src/styles.css`.
   - Verificar: `npm run app`; cambiar el ajuste cambia pilita, puntos y
     sonidos al instante; en Automático hoy (28 oct) sale Halloween.
-- [ ] T5 · Docs y cierre.
+- [x] T5 · Docs y cierre.
   - Hecho: `README.md` (ajuste nuevo), `.changes/seasonal-skins.md`
     (`bump: minor`), casillas marcadas.
   - Verificar: releer el README; todos los comandos de T1 en verde.
