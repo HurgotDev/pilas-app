@@ -34,6 +34,8 @@ pub(crate) struct PendingRequest {
     pub event: String,
     pub payload: Value,
     pub tx: mpsc::Sender<Outcome>,
+    /// Llegó con la terminal enfocada: en cola, sin avisar hasta que pierda el foco.
+    pub quiet: bool,
 }
 
 #[derive(Default)]
@@ -50,6 +52,8 @@ pub(crate) struct Inner {
     pub terminal_ids: HashMap<String, String>,
     /// Última versión nueva encontrada (`None` = al día o sin comprobar).
     pub update: Option<updates::UpdateInfo>,
+    /// Hay un hilo que vigila el foco de las solicitudes silenciosas (como máximo uno).
+    pub focus_watch: bool,
 }
 
 #[derive(Default)]
@@ -110,6 +114,71 @@ pub(crate) fn emit_snapshot(app: &AppHandle) {
     let state = app.state::<AppState>();
     let snap = snapshot(&state.0.lock().unwrap());
     let _ = app.emit("pilas://snapshot", snap);
+}
+
+/// Arranca el vigilante de foco si no está ya corriendo.
+pub(crate) fn ensure_focus_watch(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let mut inner = state.0.lock().unwrap();
+    if !inner.focus_watch {
+        inner.focus_watch = true;
+        let app = app.clone();
+        std::thread::spawn(move || watch_focus(app));
+    }
+}
+
+/// Cada segundo comprueba el foco de las solicitudes silenciosas; si la terminal
+/// ya no está enfocada, la suelta a la cola visible. Termina cuando no quedan.
+fn watch_focus(app: AppHandle) {
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let state = app.state::<AppState>();
+        let targets: Vec<(String, pilas_jump::JumpTarget)> = {
+            let mut inner = state.0.lock().unwrap();
+            let targets: Vec<_> = inner
+                .pending
+                .iter()
+                .filter(|(_, req)| req.quiet)
+                .map(|(rid, req)| {
+                    // Sin sesión, el destino vacío no tiene foco: se avisa (fallar hacia avisar).
+                    let target = inner
+                        .store
+                        .get(&req.session_id)
+                        .map(|s| pilas_jump::JumpTarget {
+                            term_program: s.term_program.clone(),
+                            tty: s.tty.clone(),
+                            ..Default::default()
+                        })
+                        .unwrap_or_default();
+                    (rid.clone(), target)
+                })
+                .collect();
+            if targets.is_empty() {
+                inner.focus_watch = false;
+                return;
+            }
+            targets
+        };
+        // osascript tarda ~100 ms: se llama sin el lock.
+        for (rid, target) in targets {
+            if pilas_jump::is_focused(&target) {
+                continue;
+            }
+            let surfaced = {
+                let mut inner = state.0.lock().unwrap();
+                match inner.pending.get_mut(&rid) {
+                    Some(req) if req.quiet => {
+                        req.quiet = false;
+                        true
+                    }
+                    _ => false,
+                }
+            };
+            if surfaced {
+                let _ = app.emit("pilas://pending", rid); // la UI abre la isla y suena la alerta
+            }
+        }
+    }
 }
 
 /// Saca una solicitud de la cola y le entrega la respuesta a su conexión.

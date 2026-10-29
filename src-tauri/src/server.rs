@@ -1,6 +1,6 @@
 //! Servidor del socket local: una conexión por invocación de `pilas-hook`, NDJSON.
 
-use crate::{emit_snapshot, AppState, Outcome, PendingRequest};
+use crate::{emit_snapshot, ensure_focus_watch, AppState, Outcome, PendingRequest};
 use pilas_core::protocol::{HookMessage, PROTOCOL_VERSION};
 use pilas_core::session::StoreEvent;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -50,6 +50,13 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
         return; // versión más nueva que la nuestra: el hook sale sin decisión
     }
 
+    // Antes del lock: osascript tarda ~100 ms y no debe bloquear la UI.
+    let quiet = msg.blocking
+        && pilas_jump::is_focused(&pilas_jump::JumpTarget {
+            term_program: msg.term_program.clone(),
+            tty: msg.tty.clone(),
+            ..Default::default()
+        });
     let state = app.state::<AppState>();
     let rx = {
         let mut inner = state.0.lock().unwrap();
@@ -71,6 +78,7 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
                     event: msg.event.clone(),
                     payload: msg.payload.clone(),
                     tx: tx.clone(),
+                    quiet,
                 },
             );
             inner.queue.push_back(msg.id.clone());
@@ -86,7 +94,9 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
         }
     };
     emit_snapshot(&app);
-    if msg.blocking {
+    if quiet {
+        ensure_focus_watch(&app);
+    } else if msg.blocking {
         let _ = app.emit("pilas://pending", msg.id.clone()); // la UI abre la isla y suena la alerta
     }
 

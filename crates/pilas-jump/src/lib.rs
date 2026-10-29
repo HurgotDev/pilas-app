@@ -116,6 +116,34 @@ impl TerminalJumper for GhosttyJumper {
     }
 }
 
+/// ¿Tiene el foco la terminal de esta sesión? Solo Ghostty se puede comprobar;
+/// cualquier error cuenta como "no enfocada" para avisar al usuario.
+pub fn is_focused(target: &JumpTarget) -> bool {
+    if !GhosttyJumper.can_handle(target.term_program.as_deref()) {
+        return false;
+    }
+    let Some(tty) = target.tty.as_deref().filter(|t| !t.is_empty()) else {
+        return false;
+    };
+    osascript(focused_tty_script()).is_ok_and(|focused| tty_matches(&focused, Some(tty)))
+}
+
+/// Script que devuelve el tty de la terminal enfocada de Ghostty, o "" si
+/// Ghostty no corre o no está al frente. Nunca lanza Ghostty.
+fn focused_tty_script() -> &'static str {
+    "if application \"Ghostty\" is running then\n\
+       tell application \"Ghostty\"\n\
+         if frontmost then return (tty of focused terminal of selected tab of front window) as text\n\
+       end tell\n\
+     end if\n\
+     return \"\""
+}
+
+/// La sesión tiene el foco solo si el tty coincide exactamente.
+fn tty_matches(focused: &str, tty: Option<&str>) -> bool {
+    tty.is_some_and(|t| !t.is_empty() && t == focused)
+}
+
 /// Cualquier otra terminal: traerla al frente por su nombre de app.
 pub struct GenericJumper;
 
@@ -164,6 +192,46 @@ mod tests {
         let s = unique_script("tty", "/dev/ttys004");
         assert!(s.contains(r#"whose tty is "/dev/ttys004""#));
         assert!(s.contains("(count of ts) is 1"));
+    }
+
+    #[test]
+    fn script_foco_comprueba_que_ghostty_corre_antes_de_tell() {
+        let s = focused_tty_script();
+        let guard = s.find("is running").expect("falta el guard `is running`");
+        let tell = s.find("tell application").expect("falta el `tell`");
+        assert!(guard < tell, "el guard debe ir antes del `tell`");
+    }
+
+    #[test]
+    fn script_foco_exige_frontmost_y_terminal_enfocada() {
+        let s = focused_tty_script();
+        assert!(s.contains("frontmost"));
+        assert!(s.contains("focused terminal of selected tab of front window"));
+    }
+
+    #[test]
+    fn tty_coincide_solo_si_es_igual_y_no_vacio() {
+        assert!(tty_matches("/dev/ttys007", Some("/dev/ttys007")));
+        assert!(!tty_matches("/dev/ttys007", Some("/dev/ttys004")));
+        assert!(!tty_matches("", Some("")));
+        assert!(!tty_matches("", Some("/dev/ttys007")));
+        assert!(!tty_matches("/dev/ttys007", None));
+    }
+
+    #[test]
+    fn sin_foco_si_no_es_ghostty_o_no_hay_tty() {
+        let iterm = JumpTarget {
+            term_program: Some("iterm.app".into()),
+            tty: Some("/dev/ttys007".into()),
+            ..Default::default()
+        };
+        assert!(!is_focused(&iterm));
+        let sin_tty = JumpTarget {
+            term_program: Some("ghostty".into()),
+            tty: None,
+            ..Default::default()
+        };
+        assert!(!is_focused(&sin_tty));
     }
 
     #[test]
