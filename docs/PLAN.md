@@ -77,7 +77,7 @@ Cada hito termina con algo que se puede probar a mano. El orden ataca primero el
 
 Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
 
-- [ ] T1 · Ajuste `skin` y `resolveSkin`.
+- [x] T1 · Ajuste `skin` y `resolveSkin`.
   - Hecho: enum `Skin` en `src-tauri/src/settings.rs` (falta o desconocido
     → `auto`, sin perder otros ajustes) reflejado en `ui/src/island/api.ts`;
     `ui/src/mascot/skins.ts` con `resolveSkin(choice, date)`; script

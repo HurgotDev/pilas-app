@@ -6,6 +6,17 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// Disfraz de la pilita. Un valor desconocido (p. ej. de una versión más nueva) cuenta como `Auto`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Skin {
+    Classic,
+    Halloween,
+    #[default]
+    #[serde(other)]
+    Auto,
+}
+
 /// Mismo contrato que `ui/src/island/api.ts` (snake_case, como el resto de la app).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -20,6 +31,8 @@ pub struct Settings {
     pub onboarded: bool,
     /// Busca actualizaciones al arrancar y cada 24 h (ver `updates.rs`).
     pub check_updates: bool,
+    /// Disfraz de temporada; `Auto` cambia según la fecha local (ver `ui/src/mascot/skins.ts`).
+    pub skin: Skin,
 }
 
 impl Default for Settings {
@@ -33,6 +46,7 @@ impl Default for Settings {
             lang: None,
             onboarded: false,
             check_updates: true,
+            skin: Skin::default(),
         }
     }
 }
@@ -139,5 +153,27 @@ mod tests {
         assert!(!s.onboarded);
         assert!(s.check_updates);
         assert_eq!(s.screen, ScreenChoice::Main);
+    }
+
+    #[test]
+    fn skin_sin_valor_o_desconocido_es_auto_sin_perder_ajustes() {
+        let s: Settings = serde_json::from_str(r#"{"volume":0.2}"#).unwrap();
+        assert_eq!(s.skin, Skin::Auto);
+        let s: Settings = serde_json::from_str(r#"{"skin":"pirate","volume":0.2,"lang":"es"}"#).unwrap();
+        assert_eq!(s.skin, Skin::Auto);
+        assert_eq!(s.volume, 0.2);
+        assert_eq!(s.lang.as_deref(), Some("es"));
+    }
+
+    #[test]
+    fn skin_ida_y_vuelta_en_snake_case() {
+        for (skin, text) in [
+            (Skin::Auto, "auto"),
+            (Skin::Classic, "classic"),
+            (Skin::Halloween, "halloween"),
+        ] {
+            assert_eq!(serde_json::to_value(skin).unwrap(), json!(text));
+            assert_eq!(serde_json::from_value::<Skin>(json!(text)).unwrap(), skin);
+        }
     }
 }
