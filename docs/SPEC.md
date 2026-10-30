@@ -448,8 +448,9 @@ inválidas se saltan; un fallo deja el reloj como estaba. Nunca se guarda ni
 se registra contenido del transcript.
 
 **TTL**: el detectado; si aún no hay, el último conocido de la sesión; si no,
-**5 min estimado** (nunca dice "caliente" cuando podría estar fría). La UI
-marca el estimado con `~`.
+**5 min estimado** (nunca dice "caliente" cuando podría estar fría). El
+`title` del chip dice si es detectado o estimado. Las líneas sintéticas
+(`message.model: "<synthetic>"`: errores, límites) no cuentan.
 
 **Override de desarrollo**: `PILAS_CACHE_TTL_SECS=<n>` sustituye el TTL de
 todas las sesiones, solo en builds de debug (`cfg!(debug_assertions)`); la

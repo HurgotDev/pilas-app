@@ -41,7 +41,9 @@ pub fn ttl_of(clock: &CacheClock) -> u64 {
 
 /// Instante (ms desde UNIX_EPOCH) en el que la caché expira, si hay una petición.
 pub fn expires_ms(clock: &CacheClock) -> Option<u64> {
-    clock.last_ms.map(|last| last + ttl_of(clock) * 1000)
+    clock
+        .last_ms
+        .map(|last| last.saturating_add(ttl_of(clock).saturating_mul(1000)))
 }
 
 /// Estado de la caché en `now_ms`. `warn_s` es el umbral de aviso ("enfriándose").
@@ -54,8 +56,9 @@ pub fn temperature(clock: &CacheClock, now_ms: u64, warn_s: u64) -> Option<Cache
         return Some(CacheTemp::Compactada);
     }
     // Con TTL de 5 min y umbral de 5 min o más, la sesión no debe nacer "enfriándose".
-    let warn_ms = warn_s.min(ttl_of(clock) / 2) as i64 * 1000;
-    let remaining = expires as i64 - now_ms as i64;
+    // i128: ninguna combinación de u64 desborda.
+    let warn_ms = i128::from(warn_s.min(ttl_of(clock) / 2)) * 1000;
+    let remaining = i128::from(expires) - i128::from(now_ms);
     Some(if remaining <= 0 {
         CacheTemp::Fria
     } else if remaining <= warn_ms {
@@ -87,6 +90,8 @@ pub fn parse_transcript_tail(text: &str) -> TranscriptCache {
         };
         if v.get("type").and_then(Value::as_str) != Some("assistant")
             || v.get("isSidechain").and_then(Value::as_bool) == Some(true)
+            // Líneas sintéticas (errores de API, límites): nunca tocaron la caché.
+            || v.pointer("/message/model").and_then(Value::as_str) == Some("<synthetic>")
         {
             continue;
         }
@@ -282,6 +287,31 @@ mod tests {
                 caching_observed: true
             }
         );
+    }
+
+    #[test]
+    fn ignora_líneas_sintéticas() {
+        let sintetica = serde_json::json!({
+            "type": "assistant", "isSidechain": false, "timestamp": "2026-10-30T17:00:00.000Z",
+            "message": { "model": "<synthetic>", "usage": {
+                "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0
+            } }
+        })
+        .to_string();
+        let texto = format!("{}\n{sintetica}", linea(TS, false, 3405, 0, 114_266));
+        let t = parse_transcript_tail(&texto);
+        assert_eq!(t.last_ts_ms, Some(TS_MS));
+        assert_eq!(t.ttl_s, Some(3600));
+        assert!(t.caching_observed);
+    }
+
+    #[test]
+    fn ttl_enorme_no_desborda() {
+        let clock = CacheClock {
+            ttl_s: Some(u64::MAX),
+            ..reloj(None)
+        };
+        assert_eq!(temperature(&clock, T0, 300), Some(CacheTemp::Caliente));
     }
 
     #[test]

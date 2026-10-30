@@ -366,16 +366,17 @@ fn spawn_discovery(app: AppHandle) {
             return;
         };
         let found = parse_agents(&json);
+        // Fuera del lock: find_transcript hace read_dir y stats.
+        let paths: Vec<_> = found.iter().map(|d| find_transcript(&d.session_id)).collect();
         let mut reads = vec![];
         {
             let state = app.state::<AppState>();
             let mut inner = state.0.lock().unwrap();
             let enabled = inner.settings.cache_enabled;
-            for d in &found {
+            for (d, path) in found.iter().zip(paths) {
                 if !inner.store.register_discovered(d) {
                     continue;
                 }
-                let path = find_transcript(&d.session_id);
                 if let (Some(s), Some(p)) = (inner.store.get_mut(&d.session_id), &path) {
                     s.transcript_path = Some(p.clone());
                 }
