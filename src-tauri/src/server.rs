@@ -65,7 +65,9 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
         let sid = pilas_core::protocol::session_id(&msg.payload).unwrap_or_default();
         let known_before = inner.store.get(sid).is_some();
         let events = inner.store.apply(&msg);
-        if let Some(delay) = cache::transcript_read_delay_ms(&msg.event, &msg.payload, known_before) {
+        let delay = cache::transcript_read_delay_ms(&msg.event, &msg.payload, known_before);
+        // Con la temperatura de caché desactivada no se lee ningún transcript.
+        if let Some(delay) = delay.filter(|_| inner.settings.cache_enabled) {
             if let Some(path) = inner.store.get(sid).and_then(|s| s.transcript_path.clone()) {
                 spawn_transcript_read(app.clone(), sid.to_string(), path, delay);
             }

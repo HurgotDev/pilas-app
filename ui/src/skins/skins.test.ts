@@ -104,3 +104,12 @@ test("el analizador de selectores ve los de @media y salta los de @keyframes", (
   const css = `/* x { } */ a, b { c: d; } @media (x) { e { f: g; } } @keyframes k { from { h: i; } 50% { j: k; } } l { }`;
   assert.deepEqual(selectors(css), ["a", "b", "e", "l"]);
 });
+
+test("frio son tres notas triangulares descendentes de ~0,5 s", () => {
+  const notes = notesFor(SKINS.classic, "frio");
+  assert.equal(notes.length, 3);
+  assert.ok(notes.every((n) => n.type === "triangle"));
+  assert.ok(notes[0].f > notes[1].f && notes[1].f > notes[2].f);
+  const end = Math.max(...notes.map((n) => n.t + n.d));
+  assert.ok(end > 0.4 && end <= 0.6);
+});

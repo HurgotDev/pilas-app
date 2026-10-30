@@ -69,6 +69,9 @@ export const onSnapshot = (cb: (s: Snapshot) => void) => listen<Snapshot>("pilas
 export const onPending = (cb: (requestId: string) => void) => listen<string>("pilas://pending", (e) => cb(e.payload));
 export const onHover = (cb: (inside: boolean) => void) => listen<boolean>("pilas://hover", (e) => cb(e.payload));
 export const onFinished = (cb: (sessionId: string) => void) => listen<string>("pilas://finished", (e) => cb(e.payload));
+/** Una vez por cada paso de una sesión a `enfriandose`. */
+export const onCacheCooling = (cb: (sessionId: string) => void) =>
+  listen<string>("pilas://cache-cooling", (e) => cb(e.payload));
 
 // Ajustes y instalador: tipos reflejan el contrato del backend (docs/SPEC.md → Instalación, ajustes y onboarding).
 export type ScreenChoice = "main" | "notch" | { named: string };
@@ -84,6 +87,11 @@ export interface Settings {
   check_updates: boolean;
   /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/skins/index.ts`). */
   skin: SkinChoice;
+  /** Temperatura de la caché del prompt; apagada = sin estados ni lecturas de transcript. */
+  cache_enabled: boolean;
+  /** Minutos de aviso antes de enfriarse: 1, 2, 5, 10 o 15. */
+  cache_warn_min: number;
+  cache_sound: boolean;
 }
 
 export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";

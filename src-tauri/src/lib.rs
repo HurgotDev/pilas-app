@@ -43,7 +43,8 @@ pub(crate) struct Inner {
     pub pending: HashMap<String, PendingRequest>,
     /// Ids de solicitud en orden de llegada.
     pub queue: VecDeque<String>,
-    pub screen: panel::ScreenChoice,
+    /// Ajustes vigentes: se cargan al arrancar y se reemplazan en `set_settings`.
+    pub settings: settings::Settings,
     pub mode: panel::IslandMode,
     pub open_height: Option<f64>,
     /// Sesión → id de terminal de Ghostty, guardado tras un salto exacto.
@@ -54,9 +55,6 @@ pub(crate) struct Inner {
     /// TTL forzado con `PILAS_CACHE_TTL_SECS` (solo en compilaciones de depuración).
     pub cache_ttl_override: Option<u64>,
 }
-
-/// Umbral de aviso "enfriándose" (5 min); pasará a ser un ajuste en T3.
-const CACHE_WARN_S: u64 = 300;
 
 #[derive(Default)]
 pub struct AppState(pub(crate) Mutex<Inner>);
@@ -99,14 +97,14 @@ pub struct Snapshot {
 }
 
 /// Vista de caché de un reloj en `now`; `None` si no hay estado que mostrar.
-fn cache_view(clock: &CacheClock, now: u64, ttl_override: Option<u64>) -> Option<CacheView> {
+fn cache_view(clock: &CacheClock, now: u64, ttl_override: Option<u64>, warn_s: u64) -> Option<CacheView> {
     let clock = CacheClock {
         ttl_s: ttl_override.or(clock.ttl_s),
         ttl_detected: clock.ttl_detected && ttl_override.is_none(),
         ..clock.clone()
     };
     Some(CacheView {
-        temp: cache::temperature(&clock, now, CACHE_WARN_S)?,
+        temp: cache::temperature(&clock, now, warn_s)?,
         expires_ms: cache::expires_ms(&clock),
         ttl_s: cache::ttl_of(&clock),
         ttl_detected: clock.ttl_detected,
@@ -150,12 +148,18 @@ pub(crate) fn snapshot(inner: &Inner) -> Snapshot {
         .collect();
     let now = now_ms();
     let ttl_override = inner.cache_ttl_override;
+    let enabled = inner.settings.cache_enabled;
+    let warn_s = u64::from(inner.settings.cache_warn_min) * 60;
     let sessions: Vec<SessionView> = inner
         .store
         .list()
         .into_iter()
         .map(|s| SessionView {
-            cache: cache_view(&s.cache, now, ttl_override),
+            cache: if enabled {
+                cache_view(&s.cache, now, ttl_override, warn_s)
+            } else {
+                None
+            },
             session: s.clone(),
         })
         .collect();
@@ -245,7 +249,7 @@ fn apply_layout(app: &AppHandle) {
     let (screen, mode, open_height) = {
         let state = app.state::<AppState>();
         let inner = state.0.lock().unwrap();
-        (inner.screen.clone(), inner.mode, inner.open_height)
+        (inner.settings.screen.clone(), inner.mode, inner.open_height)
     };
     panel::place(app, screen, mode, open_height);
 }
@@ -286,10 +290,27 @@ fn pid_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
 }
 
-/// Cada 5 s recalcula la temperatura de las cachés y emite el snapshot solo si algún estado cambió.
+type CacheTemps = Vec<(String, Option<CacheTemp>)>;
+
+/// Sesiones que en `current` están en `enfriandose` y en `prev` no lo estaban (un aviso por episodio).
+fn newly_cooling(prev: &CacheTemps, current: &CacheTemps) -> Vec<String> {
+    let cooling = |temps: &CacheTemps, id: &str| {
+        temps
+            .iter()
+            .any(|(sid, t)| sid == id && *t == Some(CacheTemp::Enfriandose))
+    };
+    current
+        .iter()
+        .filter(|(id, _)| cooling(current, id) && !cooling(prev, id))
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
+/// Cada 5 s recalcula la temperatura de las cachés, emite el snapshot solo si algún estado cambió
+/// y `pilas://cache-cooling` por cada sesión que acaba de pasar a `enfriandose`.
 fn spawn_cache_watch(app: AppHandle) {
     std::thread::spawn(move || {
-        let mut last = None;
+        let mut last: Option<(CacheTemps, Option<CacheTemp>)> = None;
         loop {
             std::thread::sleep(std::time::Duration::from_secs(5));
             let current = {
@@ -303,9 +324,13 @@ fn spawn_cache_watch(app: AppHandle) {
                     .collect();
                 (temps, snap.cache_mascot)
             };
+            let cooling = newly_cooling(last.as_ref().map_or(&Vec::new(), |l| &l.0), &current.0);
             if last.as_ref() != Some(&current) {
                 last = Some(current);
                 emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+            }
+            for id in cooling {
+                let _ = app.emit("pilas://cache-cooling", id);
             }
         }
     });
@@ -393,12 +418,14 @@ fn get_settings() -> settings::Settings {
     settings::load()
 }
 
-/// Persiste, recoloca la isla, sincroniza el LaunchAgent y avisa a todas las ventanas.
+/// Persiste, recoloca la isla, sincroniza el LaunchAgent y avisa a todas las ventanas
+/// (también con un snapshot nuevo: los ajustes de caché cambian lo que muestra).
 #[tauri::command]
 fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::Settings) -> Result<(), String> {
     settings::save(&settings)?;
-    state.0.lock().unwrap().screen = settings.screen.clone();
+    state.0.lock().unwrap().settings = settings.clone();
     apply_layout(&app);
+    emit_snapshot(&app);
     settings::sync_launch_agent(settings.launch_at_login)?;
     let _ = app.emit("pilas://settings", &settings);
     Ok(())
@@ -549,7 +576,7 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory); // sin ícono en el Dock
 
             let settings = settings::load();
-            app.state::<AppState>().0.lock().unwrap().screen = settings.screen.clone();
+            app.state::<AppState>().0.lock().unwrap().settings = settings.clone();
 
             if let Some(window) = app.get_webview_window("island") {
                 panel::make_panel(&window);
@@ -597,6 +624,26 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enfriandose_avisa_una_vez_por_episodio() {
+        let t = |pairs: &[(&str, Option<CacheTemp>)]| -> CacheTemps {
+            pairs.iter().map(|(id, t)| (id.to_string(), *t)).collect()
+        };
+        use CacheTemp::*;
+        let empty = t(&[]);
+        let a_hot = t(&[("a", Some(Caliente)), ("b", None)]);
+        let a_cool = t(&[("a", Some(Enfriandose)), ("b", Some(Enfriandose))]);
+        let a_cool_b_cold = t(&[("a", Some(Enfriandose)), ("b", Some(Fria))]);
+        assert_eq!(newly_cooling(&empty, &a_cool), vec!["a", "b"]);
+        assert_eq!(newly_cooling(&a_hot, &a_cool), vec!["a", "b"]);
+        // Sigue enfriándose: no repite.
+        assert!(newly_cooling(&a_cool, &a_cool_b_cold).is_empty());
+        // Sale (caliente otra vez) y vuelve: episodio nuevo.
+        assert_eq!(newly_cooling(&a_hot, &a_cool_b_cold), vec!["a"]);
+        // Desactivado (None) no avisa.
+        assert!(newly_cooling(&a_cool, &t(&[("a", None)])).is_empty());
+    }
 
     #[test]
     fn tray_icon_is_template_36x36() {

@@ -421,6 +421,9 @@ export function mountIsland(root: HTMLElement): void {
     }, 60_000);
   });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
+  // El sonido global lo filtra `play`; aquí solo el ajuste propio de la caché.
+  let cacheSound = true;
+  api.onCacheCooling(() => { if (cacheSound) play("frio"); });
   // Skin efectiva en la pilita, en la raíz (su CSS en ui/src/skins), en los sonidos y en su capa de ambiente.
   let current: SkinDef | null = null;
   function applySkin(): void {
@@ -439,6 +442,7 @@ export function mountIsland(root: HTMLElement): void {
     setLang(s.lang);
     configure({ enabled: s.sound_enabled, volume: s.volume });
     openOnPending = s.open_on_pending;
+    cacheSound = s.cache_enabled && s.cache_sound;
     skinChoice = s.skin;
     applySkin();
     render();

@@ -13,7 +13,8 @@ const HOOK_LABEL: Record<api.HookStatus, Key> = {
   needs_repair: "hooks.needs_repair",
   invalid_json: "hooks.invalid_json",
 };
-type BoolKey = "sound_enabled" | "open_on_pending" | "launch_at_login" | "check_updates";
+type BoolKey = "sound_enabled" | "open_on_pending" | "launch_at_login" | "check_updates" | "cache_enabled" | "cache_sound";
+const CACHE_WARN_OPTIONS = [1, 2, 5, 10, 15]; // mismo conjunto que `CACHE_WARN_OPTIONS` en settings.rs
 
 let settings: api.Settings;
 let hooks: api.HooksInfo = { status: "missing", settings_path: "" };
@@ -163,8 +164,8 @@ function connectBody(): string {
     <div class="btns"><button class="primary" data-apply ${diff && !busy ? "" : "disabled"}>${t("hooks.connect")}</button></div>`;
 }
 
-const check = (key: BoolKey, label: Key) =>
-  `<label class="row"><span>${t(label)}</span><input type="checkbox" data-bool="${key}" ${settings[key] ? "checked" : ""}></label>`;
+const check = (key: BoolKey, label: Key, disabled = false) =>
+  `<label class="row"><span>${t(label)}</span><input type="checkbox" data-bool="${key}" ${settings[key] ? "checked" : ""} ${disabled ? "disabled" : ""}></label>`;
 
 const STEP_BODY: (() => string)[] = [
   () => `<pilas-mascot class="hero" state="cargando" skin="${skinNow()}"></pilas-mascot>
@@ -268,6 +269,14 @@ function settingsView(): string {
         <select data-skin>${skinOpts.map(([v, l]) => `<option value="${v}" ${v === settings.skin ? "selected" : ""}>${t(l)}</option>`).join("")}</select>
       </label>
     </section>
+    <h2>${t("set.cache")}</h2>
+    <section class="group">
+      ${check("cache_enabled", "set.cache_enabled")}
+      <label class="row"><span>${t("set.cache_warn")}</span>
+        <select data-cache-warn ${settings.cache_enabled ? "" : "disabled"}>${CACHE_WARN_OPTIONS.map((n) => `<option value="${n}" ${n === settings.cache_warn_min ? "selected" : ""}>${t("set.cache_warn.min", { n })}</option>`).join("")}</select>
+      </label>
+      ${check("cache_sound", "set.cache_sound", !settings.cache_enabled)}
+    </section>
     <h2>${t("upd.title")}</h2>
     <section class="group">
       ${check("check_updates", "set.check_updates")}
@@ -307,6 +316,7 @@ root.addEventListener("change", (e) => {
   if (el instanceof HTMLInputElement && el.dataset.bool) {
     settings[el.dataset.bool as BoolKey] = el.checked;
     save();
+    if (el.dataset.bool === "cache_enabled") render(); // activa o apaga los controles que dependen de él
   } else if (el instanceof HTMLInputElement && el.hasAttribute("data-volume")) {
     settings.volume = Number(el.value) / 100;
     save();
@@ -319,6 +329,9 @@ root.addEventListener("change", (e) => {
     setLang(settings.lang);
     save();
     render();
+  } else if (el instanceof HTMLSelectElement && el.hasAttribute("data-cache-warn")) {
+    settings.cache_warn_min = Number(el.value);
+    save();
   } else if (el instanceof HTMLSelectElement && el.hasAttribute("data-skin")) {
     settings.skin = el.value as SkinChoice;
     save();
