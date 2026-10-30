@@ -5,6 +5,7 @@
   --allow: #34c46a;
   --deny: #ef4b5f;
   --accent: #4f7df3;
+  --cold: #8fd3ff;
   font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
   color-scheme: dark;
 }
@@ -27,6 +28,11 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
          display: grid; place-items: center; padding: 0 6px; }
 /* display: grid pisa el atributo hidden: sin pendientes el contador no se ve. */
 .badge[hidden] { display: none; }
+/* Cuenta atrás de la caché: ocupa el hueco del contador (48 px de margen junto al notch, menos el padding). */
+.cooldown { max-width: 36px; height: 20px; padding: 0 2px; border: 0; border-radius: 6px; background: none; color: var(--cold);
+            font: inherit; font-size: 11px; font-weight: 700; line-height: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
+.cooldown:hover, .cooldown:focus-visible { background: #15324a; outline: none; }
+.cooldown[hidden] { display: none; }
 
 .panel { position: relative; box-sizing: border-box; min-width: 420px; padding: 4px 16px 16px;
          transition: opacity .15s ease, visibility 0s .3s; opacity: 0; visibility: hidden; }
@@ -45,6 +51,10 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
 .row .name { font-weight: 700; }
 .row .action { color: var(--muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .ago { color: var(--muted); flex: none; white-space: nowrap; }
+.row .cache { flex: none; white-space: nowrap; font-size: 11px; padding: 2px 8px; border-radius: 8px; background: #2a2d3a; }
+.row .cache[data-temp="enfriandose"] { color: var(--cold); background: #15324a; }
+.row .cache[data-temp="fria"] { opacity: .5; }
+.row .cache[data-temp="compactada"] { color: var(--muted); }
 
 .card-head { color: var(--muted); }
 .card-body { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; background: #111218;

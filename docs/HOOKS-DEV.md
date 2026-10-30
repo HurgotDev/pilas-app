@@ -23,6 +23,7 @@ Crea `~/pilas-sandbox/.claude/settings.local.json` (la ruta del binario debe ser
     "Notification":     [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
     "Stop":             [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
     "StopFailure":      [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "PreCompact":       [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
     "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }]
   }
 }
@@ -61,3 +62,15 @@ PILAS_CLAUDE_SETTINGS=/tmp/claude-test.json npm run app
 Desde la ventana de ajustes verás el diff; al aplicarlo se crea
 `/tmp/claude-test.json.pilas-backup-AAAAMMDD-HHMMSS`. Sin la variable, la app
 usa tu configuración real.
+
+## Probar la temperatura de caché sin esperar una hora
+
+En builds de debug, `PILAS_CACHE_TTL_SECS` sustituye el TTL de todas las
+sesiones (la release lo ignora). Con el aviso en 1 min en Ajustes:
+
+```bash
+PILAS_CACHE_TTL_SECS=120 npm run app
+```
+
+Tras una respuesta en el sandbox la sesión sale caliente; a los 60 s
+enfriándose (tirita, sonido y cuenta atrás en la píldora) y a los 120 s fría.

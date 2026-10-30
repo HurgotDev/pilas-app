@@ -2,7 +2,7 @@
 
 use crate::panel::ScreenChoice;
 use pilas_core::paths::data_dir;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
@@ -34,6 +34,25 @@ pub struct Settings {
     pub check_updates: bool,
     /// Disfraz de temporada; `Auto` cambia según la fecha local (ver `ui/src/skins/index.ts`).
     pub skin: Skin,
+    /// Temperatura de la caché del prompt (docs/SPEC.md → Temperatura de caché).
+    pub cache_enabled: bool,
+    /// Minutos de aviso antes de que la caché se enfríe; solo `CACHE_WARN_OPTIONS`.
+    #[serde(deserialize_with = "warn_min")]
+    pub cache_warn_min: u32,
+    pub cache_sound: bool,
+}
+
+/// Umbrales de aviso que ofrece Ajustes.
+pub const CACHE_WARN_OPTIONS: [u32; 5] = [1, 2, 5, 10, 15];
+const CACHE_WARN_DEFAULT: u32 = 5;
+
+/// Un umbral fuera de la lista (o con otro tipo) cuenta como 5 sin invalidar el resto de los ajustes.
+fn warn_min<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(v.as_u64()
+        .and_then(|n| u32::try_from(n).ok())
+        .filter(|n| CACHE_WARN_OPTIONS.contains(n))
+        .unwrap_or(CACHE_WARN_DEFAULT))
 }
 
 impl Default for Settings {
@@ -48,6 +67,9 @@ impl Default for Settings {
             onboarded: false,
             check_updates: true,
             skin: Skin::default(),
+            cache_enabled: true,
+            cache_warn_min: CACHE_WARN_DEFAULT,
+            cache_sound: true,
         }
     }
 }
@@ -164,6 +186,43 @@ mod tests {
         assert_eq!(s.skin, Skin::Auto);
         assert_eq!(s.volume, 0.2);
         assert_eq!(s.lang.as_deref(), Some("es"));
+    }
+
+    #[test]
+    fn ajustes_de_cache_que_faltan_toman_el_valor_por_defecto() {
+        let s: Settings = serde_json::from_str(r#"{"volume":0.2}"#).unwrap();
+        assert!(s.cache_enabled);
+        assert_eq!(s.cache_warn_min, 5);
+        assert!(s.cache_sound);
+    }
+
+    #[test]
+    fn umbral_de_cache_invalido_es_5_sin_perder_ajustes() {
+        for bad in [r#"3"#, r#"0"#, r#""diez""#, r#"-1"#, r#"null"#, r#"99999999999"#] {
+            let text = format!(r#"{{"cache_warn_min":{bad},"volume":0.2,"lang":"es","cache_sound":false}}"#);
+            let s: Settings = serde_json::from_str(&text).unwrap();
+            assert_eq!(s.cache_warn_min, 5, "{bad}");
+            assert_eq!(s.volume, 0.2);
+            assert_eq!(s.lang.as_deref(), Some("es"));
+            assert!(!s.cache_sound);
+        }
+        for ok in CACHE_WARN_OPTIONS {
+            let s: Settings = serde_json::from_str(&format!(r#"{{"cache_warn_min":{ok}}}"#)).unwrap();
+            assert_eq!(s.cache_warn_min, ok);
+        }
+    }
+
+    #[test]
+    fn ajustes_ida_y_vuelta() {
+        let s = Settings {
+            cache_enabled: false,
+            cache_warn_min: 15,
+            cache_sound: false,
+            lang: Some("en".into()),
+            ..Settings::default()
+        };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back, s);
     }
 
     #[test]

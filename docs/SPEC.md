@@ -30,6 +30,7 @@ Un agente (Claude Code), una plataforma validada (macOS) y una terminal con salt
 | Ajustes mínimos | Pantalla, sonido, idioma, inicio con el sistema |
 | Idiomas | Inglés (por defecto) y español |
 | Skins de temporada | Clásica, Halloween y Navidad; automática por fecha |
+| Temperatura de caché | Caliente, enfriándose, fría; aviso con sonido |
 
 Fuera de alcance: otros agentes, chat con IA, integraciones, diffs en vivo, uso del plan, app móvil, atajos
 globales, skins hechas por el usuario, notificaciones del sistema, firma/notarización, builds oficiales de Windows y Linux.
@@ -65,6 +66,7 @@ Referencia: https://code.claude.com/docs/en/hooks. Todos los hooks apuntan a `pi
 | `Stop` | No | Turno terminado; guarda `last_assistant_message` |
 | `StopFailure` | No | Error de API |
 | `SessionEnd` | No | Elimina la sesión |
+| `PreCompact` | No | Detecta la compactación por inactividad |
 
 **Permisos** (`hookSpecificOutput.decision`): Permitir `{"behavior":"allow"}` · Denegar
 `{"behavior":"deny","message":"Denegado desde Pilas"}` · Siempre `{"behavior":"allow","updatedPermissions":[…]}`
@@ -154,6 +156,8 @@ metálico y franja de 4 LEDs. El color de la carcasa cuenta el estado; los LEDs,
 
 Prioridad: Alerta > Llena > Cargando > Dormida. Reacciones: hover → saludo (1,1 s), clic → aplastada (0,9 s),
 3 clics en < 1 s → mareo (2 s). Conservan el color del estado; nunca en Alerta.
+Gesto de caché (vapor, tiritar, copo): solo en Dormida; ver "Temperatura de
+caché" → "Interfaz".
 
 ## Sonidos
 
@@ -357,6 +361,193 @@ variante en Rust y sus claves en `i18n.ts`.
   gesto o animación nueva de la pilita no es de una skin: se especifica en
   "Mascota: la pilita" y vale para todas, `classic` incluida.
 
+## Temperatura de caché
+
+Muestra si la caché del prompt de la **conversación principal** de cada
+sesión sigue caliente, se está enfriando o ya está fría, y avisa antes de que
+expire para decidir si seguir o compactar. Los subagentes no cuentan.
+
+### Lo que dice Claude Code
+
+Verificado el 30 oct 2026 con Claude Code 2.1.314 en
+https://code.claude.com/docs/en/prompt-caching, `/hooks`, `/statusline` y
+`/settings-reference#idlecompaction`.
+
+- TTL por petición, en dos cubos. Conversación principal: 1 h con suscripción
+  dentro del plan; 5 min con usage credits, API key o proveedor cloud (al
+  pasar a usage credits baja a 5 min). "Todo lo demás" (subagentes,
+  compactación, títulos): 5 min, salvo ayudantes que decide el servidor.
+- Precedencia: `FORCE_PROMPT_CACHING_5M=1` → variable del cubo
+  (`CLAUDE_CODE_PROMPT_CACHE_TTL`) → ajuste (`promptCacheTtl`) →
+  `ENABLE_PROMPT_CACHING_1H=1` → defecto. Solo `5m` o `1h`.
+  `DISABLE_PROMPT_CACHING*` la apaga.
+- Cada petición que acierta reinicia el timer.
+- `usage.cache_creation.ephemeral_1h_input_tokens` /
+  `ephemeral_5m_input_tokens` dice el TTL de cada escritura. La doc lo cita
+  en la salida de `claude -p --output-format json`; en el transcript JSONL
+  aparece en cada línea `type: "assistant"` junto a `timestamp` e
+  `isSidechain`, pero **ese formato no es un contrato documentado**: se lee
+  de forma tolerante.
+- La statusline recibe `prompt_cache` (`warm`, `ttl`, `expires_at`,
+  `hit_ratio`…) desde 2.1.251. No se usa: solo cabe una statusline y la del
+  usuario no se toca.
+- Compactación por inactividad (`idleCompaction`, 2.1.290+): solo con TTL de
+  1 h, autocompactación activa, contexto ≥ 200 000 tokens y ~1 h ociosa. Los
+  hooks `PreCompact`/`PostCompact` la reportan con `trigger: "auto"`, **igual
+  que la autocompactación por ventana**; no hay valor propio.
+- `/compact` invalida la capa de conversación (system prompt y contexto del
+  proyecto pueden seguir en caché). `/clear` empieza conversación nueva:
+  `SessionEnd` `reason: "clear"` y `SessionStart` `source: "clear"`.
+
+### Estados
+
+`caliente`, `enfriandose`, `fria` y `compactada`. Sin dato (sesión sin
+respuestas todavía, caché apagada o ajuste desactivado) no hay estado.
+
+```
+restante = ultima_peticion + ttl − ahora
+aviso    = min(umbral, ttl / 2)
+compactada si hubo compactación por inactividad
+fria       si restante ≤ 0
+enfriandose si restante ≤ aviso
+caliente   en otro caso
+```
+
+El tope `ttl / 2` evita que con TTL de 5 min y umbral de 5 o más la sesión
+nazca "enfriándose".
+
+### Reloj por sesión (`crates/pilas-core/src/cache.rs`)
+
+Solo cuentan los eventos **sin `agent_id`** (los de subagentes no tocan la
+caché principal).
+
+| Evento | Efecto |
+| --- | --- |
+| `UserPromptSubmit` | Última petición = ahora; quita `compactada` |
+| `PreToolUse`, `PostToolUse(Failure)` | Última petición = ahora |
+| `Stop` | Última petición = ahora; lee el transcript a los 1,5 s |
+| `StopFailure` | Nada (la petición falló) |
+| `PreCompact` `auto` en espera | Marca `compactada` (inactividad) |
+| `PreCompact` `auto` trabajando | Nada (compactación por ventana) |
+| `SessionStart` `startup`/`clear` | Sin dato |
+| `SessionStart` `compact` | Mantiene `compactada`; si no, sin dato |
+| `SessionStart` `resume` | Lee el transcript |
+| `SessionEnd` | Elimina la sesión (como hoy) |
+
+`PreToolUse` y `PostToolUse` cuentan porque marcan el final de una respuesta
+y el inicio de la siguiente petición. Con un permiso pendiente o una
+herramienta larga el reloj corre desde ahí, que es lo real.
+
+**Lectura del transcript** (`transcript_path` del payload; función pura sobre
+el texto, IO en la app): los últimos 512 KB, de abajo arriba, solo líneas
+`type: "assistant"` con `isSidechain` distinto de `true`. Devuelve el
+`timestamp` más reciente (afina la última petición), el TTL de la escritura
+más reciente con tokens de creación (1 h si `ephemeral_1h_input_tokens` > 0,
+si no 5 min) y si se observó caché (lecturas o escrituras > 0). Líneas
+inválidas se saltan; un fallo deja el reloj como estaba. Nunca se guarda ni
+se registra contenido del transcript.
+
+**TTL**: el detectado; si aún no hay, el último conocido de la sesión; si no,
+**5 min estimado** (nunca dice "caliente" cuando podría estar fría). El
+`title` del chip dice si es detectado o estimado. Las líneas sintéticas
+(`message.model: "<synthetic>"`: errores, límites) no cuentan.
+
+**Override de desarrollo**: `PILAS_CACHE_TTL_SECS=<n>` sustituye el TTL de
+todas las sesiones, solo en builds de debug (`cfg!(debug_assertions)`); la
+release lo ignora.
+
+### Casos borde
+
+- **Varias sesiones**: un reloj por sesión. La pilita muestra el peor estado
+  accionable: `enfriandose` > `fria` > `caliente` (`compactada` no cuenta).
+- **Pilas abierta tarde**: al arrancar, `claude agents --json` (local, ya se
+  usa en `pilas-jump`) da las sesiones `interactive` con `pid`, `cwd` y
+  `sessionId`. Se registran (en espera, o trabajando si `status: "busy"`) y
+  el reloj se arranca con su transcript
+  (`~/.claude/projects/*/<sessionId>.jsonl`). Una sesión desconocida que
+  llega por un evento también lee su transcript la primera vez.
+- **Sesiones que mueren sin `SessionEnd`**: la poda por `pid` de siempre
+  (cada 30 s) se lleva también su reloj.
+- **Mac dormido**: se usa reloj de pared; al despertar el estado es el real.
+
+### Interfaz
+
+- **Pilita**: atributo observado `cache="caliente|enfriandose|fria"`. Solo
+  se ve en estado Dormida (en Cargando la sesión trabaja; Alerta y Llena
+  mandan). Nunca cambia el color del cuerpo; vale para todas las skins.
+  - Caliente: dos hilitos de vapor arriba a la izquierda del borne (2,4 s,
+    sutil), donde no chocan con los sombreros de las skins ni con la "z".
+  - Enfriándose: tirita (ráfagas cortas cada 2 s) y un copo en el mismo sitio.
+  - Fría: copo quieto, sin movimiento.
+  - Con `prefers-reduced-motion`: solo los iconos, sin animación.
+- **Píldora**: con `enfriandose` y sin pendientes, a la derecha una cuenta
+  atrás `m:ss` de la sesión que expira antes. Clic en ella salta a la
+  terminal de esa sesión sin abrir la isla.
+- **Lista**: cada fila suma un chip tras el tiempo: "warm · 48m",
+  "cooling · 3:12", "cold" o "compacted" (vía `t()`). `title` con el TTL y si
+  es detectado o estimado. Clic en la fila salta, como hoy.
+- **Sonido** `frio`: tres notas triangulares descendentes (~0,5 s), una vez
+  por cada paso a `enfriandose`, si el ajuste lo permite y el sonido global
+  está activado. Nunca en bucle. Las skins pueden darle variante.
+- La isla **no** se abre sola por la caché: no es un pendiente.
+
+### Contrato con la app
+
+- `Session.cache: { temp, expires_ms, ttl_s, ttl_detected } | null` y
+  `Snapshot.cache_mascot: temp | null` en `src-tauri/src/lib.rs`, reflejados
+  en `ui/src/island/api.ts`.
+- Un hilo revisa los relojes cada 5 s; si algún estado cambia emite el
+  snapshot, y por cada paso a `enfriandose` emite `pilas://cache-cooling`
+  con el `session_id`.
+- El instalador añade `PreCompact` (sin matcher, sin timeout). Las
+  instalaciones previas salen como "necesita reparar" y el flujo de reparar
+  de siempre muestra el diff. Los hooks ajenos y la statusline no se tocan.
+
+### Ajustes
+
+| Ajuste | Opciones | Por defecto |
+| --- | --- | --- |
+| Temperatura de caché | Sí / No | Sí |
+| Avisar antes de enfriarse | 1 / 2 / 5 / 10 / 15 min | 5 min |
+| Sonido al enfriarse | Sí / No | Sí |
+
+En `settings.json`: `cache_enabled`, `cache_warn_min`, `cache_sound`.
+Desactivado: sin estados, sin lecturas de transcript y sin sonido.
+
+### ¿Lanzar `/compact` desde Pilas?
+
+No en esta versión. Claude Code no ofrece ninguna vía para ordenarle una
+compactación: los hooks solo responden a eventos y ninguna salida dispara
+`/compact`. Lo único posible sería escribir `/compact⏎` en la terminal con
+AppleScript de Ghostty, y no es seguro:
+
+- El salto solo es exacto por id o TTY; los respaldos (cwd, `activate`)
+  podrían escribir en otra pestaña o en una shell.
+- Se pegaría a lo que el usuario tenga a medio escribir en el prompt.
+- Con Claude trabajando se encola como mensaje en vez de compactar.
+- Abre un canal de escritura en la terminal que hoy Pilas no tiene.
+
+Desde el aviso se salta a la terminal y el usuario decide.
+
+### Pruebas
+
+- `pilas-core`: fronteras de `temperature` (justo antes y después del
+  aviso y del TTL) y el tope `ttl / 2`; eventos con `agent_id` ignorados;
+  `PreCompact` `auto` en espera → `compactada`, trabajando → nada;
+  `SessionStart` por cada `source`; `UserPromptSubmit` quita `compactada`.
+- Transcript: 1 h, 5 min, una lectura sin escritura conserva el TTL de la
+  escritura anterior, `isSidechain: true` ignorado, líneas inválidas,
+  caché apagada (todo a 0) → sin estado.
+- Instalador: `PreCompact` se añade y se quita sin tocar lo ajeno.
+- A mano, con `PILAS_CACHE_TTL_SECS=120 npm run app` y umbral de 1 min:
+  caliente → enfriándose a los 60 s (tirita, sonido, cuenta atrás) → fría a
+  los 120 s; un prompt nuevo la vuelve caliente; dos sesiones a la vez con
+  estados distintos; abrir Pilas con una sesión ya abierta.
+
+Trabajo futuro (fuera de alcance): pings de keep-alive que mantengan la
+caché caliente; lanzar `/compact` solo con coincidencia exacta de terminal,
+sesión en espera y confirmación.
+
 ## Saltar a la terminal
 
 Ghostty ≥ 1.3 expone AppleScript (https://ghostty.org/docs/features/applescript): jerarquía app → ventana →
@@ -398,7 +589,8 @@ actualiza en cada versión.
 
 Sin puertos TCP y sin red salvo la búsqueda de actualizaciones (desactivable) · sin telemetría · socket 0600 · decisiones atadas al `id` exacto · nada se aprueba solo ·
 "Siempre" solo con reglas sugeridas por Claude Code y mostradas antes · las reglas `deny`/`ask` de Claude Code
-siguen mandando · sin privilegios · el instalador siempre muestra diff y hace backup · logs mínimos sin prompts.
+siguen mandando · sin privilegios · el instalador siempre muestra diff y hace backup · logs mínimos sin prompts ·
+la temperatura de caché solo lee números de uso del transcript local de cada sesión.
 
 ## Criterios de aceptación v1 (macOS + Ghostty, pantalla del MacBook y monitor externo)
 

@@ -13,6 +13,18 @@ export interface LastAction {
   arg: string | null;
 }
 
+/** Temperatura de la caché del prompt; `compactada` la pone una tarea posterior. */
+export type CacheTemp = "caliente" | "enfriandose" | "fria" | "compactada";
+
+export interface CacheView {
+  temp: CacheTemp;
+  /** Instante (ms desde UNIX_EPOCH) en que la caché expira. */
+  expires_ms: number | null;
+  ttl_s: number;
+  /** `false` = TTL estimado (5 min de respaldo). */
+  ttl_detected: boolean;
+}
+
 export interface Session {
   session_id: string;
   project: string;
@@ -21,6 +33,8 @@ export interface Session {
   last_action: LastAction | null;
   pending: number;
   updated_ms: number;
+  /** `null` cuando la sesión aún no tiene temperatura. */
+  cache: CacheView | null;
 }
 
 export interface PendingView {
@@ -37,6 +51,7 @@ export interface Snapshot {
   sessions: Session[];
   mascot: MascotState;
   pending: PendingView[];
+  cache_mascot: CacheTemp | null;
 }
 
 export const getSnapshot = () => invoke<Snapshot>("get_snapshot");
@@ -54,6 +69,9 @@ export const onSnapshot = (cb: (s: Snapshot) => void) => listen<Snapshot>("pilas
 export const onPending = (cb: (requestId: string) => void) => listen<string>("pilas://pending", (e) => cb(e.payload));
 export const onHover = (cb: (inside: boolean) => void) => listen<boolean>("pilas://hover", (e) => cb(e.payload));
 export const onFinished = (cb: (sessionId: string) => void) => listen<string>("pilas://finished", (e) => cb(e.payload));
+/** Una vez por cada paso de una sesión a `enfriandose`. */
+export const onCacheCooling = (cb: (sessionId: string) => void) =>
+  listen<string>("pilas://cache-cooling", (e) => cb(e.payload));
 
 // Ajustes y instalador: tipos reflejan el contrato del backend (docs/SPEC.md → Instalación, ajustes y onboarding).
 export type ScreenChoice = "main" | "notch" | { named: string };
@@ -69,6 +87,11 @@ export interface Settings {
   check_updates: boolean;
   /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/skins/index.ts`). */
   skin: SkinChoice;
+  /** Temperatura de la caché del prompt; apagada = sin estados ni lecturas de transcript. */
+  cache_enabled: boolean;
+  /** Minutos de aviso antes de enfriarse: 1, 2, 5, 10 o 15. */
+  cache_warn_min: number;
+  cache_sound: boolean;
 }
 
 export type HookStatus = "ok" | "missing" | "needs_repair" | "invalid_json";

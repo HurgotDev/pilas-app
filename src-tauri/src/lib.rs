@@ -10,9 +10,10 @@ mod server;
 mod settings;
 mod updates;
 
+use pilas_core::cache::{self, CacheClock, CacheTemp};
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
-use pilas_core::session::{MascotState, Session, SessionStore, StoreEvent};
+use pilas_core::session::{now_ms, parse_agents, MascotState, Session, SessionStore, StoreEvent};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -42,7 +43,8 @@ pub(crate) struct Inner {
     pub pending: HashMap<String, PendingRequest>,
     /// Ids de solicitud en orden de llegada.
     pub queue: VecDeque<String>,
-    pub screen: panel::ScreenChoice,
+    /// Ajustes vigentes: se cargan al arrancar y se reemplazan en `set_settings`.
+    pub settings: settings::Settings,
     pub mode: panel::IslandMode,
     pub open_height: Option<f64>,
     /// Sesión → id de terminal de Ghostty, guardado tras un salto exacto.
@@ -50,6 +52,8 @@ pub(crate) struct Inner {
     pub terminal_ids: HashMap<String, String>,
     /// Última versión nueva encontrada (`None` = al día o sin comprobar).
     pub update: Option<updates::UpdateInfo>,
+    /// TTL forzado con `PILAS_CACHE_TTL_SECS` (solo en compilaciones de depuración).
+    pub cache_ttl_override: Option<u64>,
 }
 
 #[derive(Default)]
@@ -67,11 +71,56 @@ pub struct PendingView {
     pub permission_suggestions: Option<Value>,
 }
 
+/// Estado de caché de una sesión para la UI.
+#[derive(Serialize, Clone)]
+pub struct CacheView {
+    pub temp: CacheTemp,
+    pub expires_ms: Option<u64>,
+    pub ttl_s: u64,
+    pub ttl_detected: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SessionView {
+    #[serde(flatten)]
+    pub session: Session,
+    pub cache: Option<CacheView>,
+}
+
 #[derive(Serialize, Clone)]
 pub struct Snapshot {
-    pub sessions: Vec<Session>,
+    pub sessions: Vec<SessionView>,
     pub mascot: MascotState,
     pub pending: Vec<PendingView>,
+    /// Peor estado accionable entre las sesiones (`enfriandose` > `fria` > `caliente`).
+    pub cache_mascot: Option<CacheTemp>,
+}
+
+/// Vista de caché de un reloj en `now`; `None` si no hay estado que mostrar.
+fn cache_view(clock: &CacheClock, now: u64, ttl_override: Option<u64>, warn_s: u64) -> Option<CacheView> {
+    let clock = CacheClock {
+        ttl_s: ttl_override.or(clock.ttl_s),
+        ttl_detected: clock.ttl_detected && ttl_override.is_none(),
+        ..clock.clone()
+    };
+    let temp = cache::temperature(&clock, now, warn_s)?;
+    Some(CacheView {
+        temp,
+        // compactada no expira: no hay cuenta atrás que mostrar
+        expires_ms: cache::expires_ms(&clock).filter(|_| temp != CacheTemp::Compactada),
+        ttl_s: cache::ttl_of(&clock),
+        ttl_detected: clock.ttl_detected,
+    })
+}
+
+/// Rango de lo accionable; `None` para estados que no avisan (compactada).
+fn actionable_rank(temp: CacheTemp) -> Option<u8> {
+    match temp {
+        CacheTemp::Caliente => Some(0),
+        CacheTemp::Fria => Some(1),
+        CacheTemp::Enfriandose => Some(2),
+        CacheTemp::Compactada => None,
+    }
 }
 
 pub(crate) fn snapshot(inner: &Inner) -> Snapshot {
@@ -99,10 +148,34 @@ pub(crate) fn snapshot(inner: &Inner) -> Snapshot {
             })
         })
         .collect();
+    let now = now_ms();
+    let ttl_override = inner.cache_ttl_override;
+    let enabled = inner.settings.cache_enabled;
+    let warn_s = u64::from(inner.settings.cache_warn_min) * 60;
+    let sessions: Vec<SessionView> = inner
+        .store
+        .list()
+        .into_iter()
+        .map(|s| SessionView {
+            cache: if enabled {
+                cache_view(&s.cache, now, ttl_override, warn_s)
+            } else {
+                None
+            },
+            session: s.clone(),
+        })
+        .collect();
+    let cache_mascot = sessions
+        .iter()
+        .filter_map(|s| s.cache.as_ref().map(|c| c.temp))
+        .filter_map(|t| actionable_rank(t).map(|r| (r, t)))
+        .max_by_key(|(r, _)| *r)
+        .map(|(_, t)| t);
     Snapshot {
-        sessions: inner.store.list().into_iter().cloned().collect(),
+        sessions,
         mascot: inner.store.mascot_state(),
         pending,
+        cache_mascot,
     }
 }
 
@@ -178,7 +251,7 @@ fn apply_layout(app: &AppHandle) {
     let (screen, mode, open_height) = {
         let state = app.state::<AppState>();
         let inner = state.0.lock().unwrap();
-        (inner.screen.clone(), inner.mode, inner.open_height)
+        (inner.settings.screen.clone(), inner.mode, inner.open_height)
     };
     panel::place(app, screen, mode, open_height);
 }
@@ -217,6 +290,143 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
 fn pid_alive(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else { return false };
     unsafe { libc::kill(pid, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
+}
+
+type CacheTemps = Vec<(String, Option<CacheTemp>)>;
+
+/// Sesiones que en `current` están en `enfriandose` y en `prev` no lo estaban (un aviso por episodio).
+fn newly_cooling(prev: &CacheTemps, current: &CacheTemps) -> Vec<String> {
+    let cooling = |temps: &CacheTemps, id: &str| {
+        temps
+            .iter()
+            .any(|(sid, t)| sid == id && *t == Some(CacheTemp::Enfriandose))
+    };
+    current
+        .iter()
+        .filter(|(id, _)| cooling(current, id) && !cooling(prev, id))
+        .map(|(id, _)| id.clone())
+        .collect()
+}
+
+/// Cada 5 s recalcula la temperatura de las cachés, emite el snapshot solo si algún estado cambió
+/// y `pilas://cache-cooling` por cada sesión que acaba de pasar a `enfriandose`.
+fn spawn_cache_watch(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut last: Option<(CacheTemps, Option<CacheTemp>)> = None;
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            let current = {
+                let state = app.state::<AppState>();
+                let inner = state.0.lock().unwrap();
+                let snap = snapshot(&inner);
+                let temps: Vec<_> = snap
+                    .sessions
+                    .iter()
+                    .map(|s| (s.session.session_id.clone(), s.cache.as_ref().map(|c| c.temp)))
+                    .collect();
+                (temps, snap.cache_mascot)
+            };
+            let cooling = newly_cooling(last.as_ref().map_or(&Vec::new(), |l| &l.0), &current.0);
+            if last.as_ref() != Some(&current) {
+                last = Some(current);
+                emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+            }
+            for id in cooling {
+                let _ = app.emit("pilas://cache-cooling", id);
+            }
+        }
+    });
+}
+
+/// Lee la cola del transcript tras `delay_ms` y la aplica al reloj de la sesión.
+/// Un fallo de IO no cambia nada; el contenido nunca se guarda ni se registra.
+pub(crate) fn spawn_transcript_read(app: AppHandle, session_id: String, path: String, delay_ms: u64) {
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        let Some(text) = read_tail(&path, 512 * 1024) else {
+            return;
+        };
+        let parsed = cache::parse_transcript_tail(&text);
+        {
+            let state = app.state::<AppState>();
+            let mut inner = state.0.lock().unwrap();
+            let Some(s) = inner.store.get_mut(&session_id) else {
+                return;
+            };
+            cache::apply_transcript(&mut s.cache, &parsed);
+        }
+        emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+    });
+}
+
+/// Pilas abierta tarde: registra las sesiones vivas que aún no conoce y arranca su reloj.
+fn spawn_discovery(app: AppHandle) {
+    std::thread::spawn(move || {
+        let Some(json) = pilas_jump::agents_json() else {
+            return;
+        };
+        let found = parse_agents(&json);
+        // Fuera del lock: find_transcript hace read_dir y stats.
+        let paths: Vec<_> = found.iter().map(|d| find_transcript(&d.session_id)).collect();
+        let mut reads = vec![];
+        {
+            let state = app.state::<AppState>();
+            let mut inner = state.0.lock().unwrap();
+            let enabled = inner.settings.cache_enabled;
+            for (d, path) in found.iter().zip(paths) {
+                if !inner.store.register_discovered(d) {
+                    continue;
+                }
+                if let (Some(s), Some(p)) = (inner.store.get_mut(&d.session_id), &path) {
+                    s.transcript_path = Some(p.clone());
+                }
+                if let (true, Some(p)) = (enabled, path) {
+                    reads.push((d.session_id.clone(), p));
+                }
+            }
+        }
+        emit_snapshot(&app);
+        for (id, path) in reads {
+            spawn_transcript_read(app.clone(), id, path, 0);
+        }
+    });
+}
+
+/// `<base>/projects/*/<sessionId>.jsonl`, con base `CLAUDE_CONFIG_DIR` o `~/.claude`.
+fn find_transcript(session_id: &str) -> Option<String> {
+    // El id acaba en una ruta: nada de separadores ni `..`.
+    if session_id.contains(['/', '\\']) || session_id.contains("..") {
+        return None;
+    }
+    let base = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".claude")))?;
+    let file = format!("{session_id}.jsonl");
+    std::fs::read_dir(base.join("projects"))
+        .ok()?
+        .flatten()
+        .map(|e| e.path().join(&file))
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// Últimos `max` bytes de un archivo como texto (UTF-8 con pérdida).
+fn read_tail(path: &str, max: u64) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    f.seek(SeekFrom::Start(len.saturating_sub(max))).ok()?;
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// `PILAS_CACHE_TTL_SECS` fuerza el TTL de todas las sesiones; solo en depuración.
+fn cache_ttl_override() -> Option<u64> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    std::env::var("PILAS_CACHE_TTL_SECS").ok()?.parse().ok()
 }
 
 /// Cada 30 s quita las sesiones cuyo proceso ya no existe (sin SessionEnd).
@@ -261,12 +471,14 @@ fn get_settings() -> settings::Settings {
     settings::load()
 }
 
-/// Persiste, recoloca la isla, sincroniza el LaunchAgent y avisa a todas las ventanas.
+/// Persiste, recoloca la isla, sincroniza el LaunchAgent y avisa a todas las ventanas
+/// (también con un snapshot nuevo: los ajustes de caché cambian lo que muestra).
 #[tauri::command]
 fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::Settings) -> Result<(), String> {
     settings::save(&settings)?;
-    state.0.lock().unwrap().screen = settings.screen.clone();
+    state.0.lock().unwrap().settings = settings.clone();
     apply_layout(&app);
+    emit_snapshot(&app);
     settings::sync_launch_agent(settings.launch_at_login)?;
     let _ = app.emit("pilas://settings", &settings);
     Ok(())
@@ -417,7 +629,7 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory); // sin ícono en el Dock
 
             let settings = settings::load();
-            app.state::<AppState>().0.lock().unwrap().screen = settings.screen.clone();
+            app.state::<AppState>().0.lock().unwrap().settings = settings.clone();
 
             if let Some(window) = app.get_webview_window("island") {
                 panel::make_panel(&window);
@@ -427,7 +639,10 @@ pub fn run() {
             panel::watch_screens(move || apply_layout(&handle));
 
             server::start(app.handle().clone())?;
+            app.state::<AppState>().0.lock().unwrap().cache_ttl_override = cache_ttl_override();
             spawn_prune(app.handle().clone());
+            spawn_discovery(app.handle().clone());
+            spawn_cache_watch(app.handle().clone());
             setup_tray(app.handle())?;
             // Recopia el hook si la app trae una versión nueva (no toca settings.json).
             std::thread::spawn(hooks::refresh_hook);
@@ -463,6 +678,39 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compactada_sin_cuenta_atras_ni_pilita() {
+        let clock = CacheClock {
+            last_ms: Some(1_000),
+            idle_compacted: true,
+            ..CacheClock::default()
+        };
+        let view = cache_view(&clock, 2_000, None, 300).unwrap();
+        assert_eq!(view.temp, CacheTemp::Compactada);
+        assert_eq!(view.expires_ms, None);
+        assert_eq!(actionable_rank(CacheTemp::Compactada), None);
+    }
+
+    #[test]
+    fn enfriandose_avisa_una_vez_por_episodio() {
+        let t = |pairs: &[(&str, Option<CacheTemp>)]| -> CacheTemps {
+            pairs.iter().map(|(id, t)| (id.to_string(), *t)).collect()
+        };
+        use CacheTemp::*;
+        let empty = t(&[]);
+        let a_hot = t(&[("a", Some(Caliente)), ("b", None)]);
+        let a_cool = t(&[("a", Some(Enfriandose)), ("b", Some(Enfriandose))]);
+        let a_cool_b_cold = t(&[("a", Some(Enfriandose)), ("b", Some(Fria))]);
+        assert_eq!(newly_cooling(&empty, &a_cool), vec!["a", "b"]);
+        assert_eq!(newly_cooling(&a_hot, &a_cool), vec!["a", "b"]);
+        // Sigue enfriándose: no repite.
+        assert!(newly_cooling(&a_cool, &a_cool_b_cold).is_empty());
+        // Sale (caliente otra vez) y vuelve: episodio nuevo.
+        assert_eq!(newly_cooling(&a_hot, &a_cool_b_cold), vec!["a"]);
+        // Desactivado (None) no avisa.
+        assert!(newly_cooling(&a_cool, &t(&[("a", None)])).is_empty());
+    }
 
     #[test]
     fn tray_icon_is_template_36x36() {

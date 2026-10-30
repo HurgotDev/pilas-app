@@ -5,6 +5,7 @@
 //!   Trabajando ─StopFailure→ Error ─UserPromptSubmit→ Trabajando
 //!   SessionEnd en cualquier estado → la sesión se elimina
 
+use crate::cache::CacheClock;
 use crate::protocol::{self, HookMessage};
 use serde::Serialize;
 use serde_json::Value;
@@ -48,6 +49,12 @@ pub struct Session {
     pub last_assistant_message: Option<String>,
     /// Milisegundos desde UNIX_EPOCH del último evento.
     pub updated_ms: u64,
+    /// Reloj de la caché del prompt; la vista (`cache::temperature`) la construye la app.
+    #[serde(skip)]
+    pub cache: CacheClock,
+    /// Ruta del transcript JSONL; solo se usa para leer la caché, nunca se muestra.
+    #[serde(skip)]
+    pub transcript_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +70,37 @@ pub struct SessionStore {
     sessions: HashMap<String, Session>,
 }
 
-fn now_ms() -> u64 {
+/// Sesión interactiva viva según `claude agents --json` (Pilas abierta tarde).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveredSession {
+    pub session_id: String,
+    pub cwd: String,
+    pub pid: u32,
+    pub busy: bool,
+}
+
+/// Solo entradas `interactive` con `pid` y `sessionId`; JSON inválido → ninguna.
+pub fn parse_agents(json: &str) -> Vec<DiscoveredSession> {
+    let Ok(Value::Array(entries)) = serde_json::from_str::<Value>(json) else {
+        return vec![];
+    };
+    let str_of = |e: &Value, k: &str| e.get(k).and_then(Value::as_str).map(str::to_string);
+    entries
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_str) == Some("interactive"))
+        .filter_map(|e| {
+            Some(DiscoveredSession {
+                session_id: str_of(e, "sessionId").filter(|s| !s.is_empty())?,
+                cwd: str_of(e, "cwd").unwrap_or_default(),
+                pid: u32::try_from(e.get("pid")?.as_u64()?).ok()?,
+                busy: e.get("status").and_then(Value::as_str) == Some("busy"),
+            })
+        })
+        .collect()
+}
+
+/// Reloj de pared en milisegundos desde UNIX_EPOCH.
+pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -157,6 +194,38 @@ impl SessionStore {
         self.sessions.remove(id)
     }
 
+    /// Registra una sesión descubierta al arrancar si aún no se conoce (los eventos mandan).
+    pub fn register_discovered(&mut self, d: &DiscoveredSession) -> bool {
+        if self.sessions.contains_key(&d.session_id) {
+            return false;
+        }
+        let state = if d.busy {
+            SessionState::Trabajando
+        } else {
+            SessionState::EnEspera
+        };
+        self.sessions.insert(
+            d.session_id.clone(),
+            Session {
+                session_id: d.session_id.clone(),
+                agent: protocol::AGENT_CLAUDE_CODE.into(),
+                project: project_of(&d.cwd),
+                cwd: d.cwd.clone(),
+                tty: None,
+                pid: Some(d.pid),
+                term_program: None,
+                state,
+                last_action: None,
+                pending: 0,
+                last_assistant_message: None,
+                updated_ms: now_ms(),
+                cache: CacheClock::default(),
+                transcript_path: None,
+            },
+        );
+        true
+    }
+
     /// Quita las sesiones cuyo `pid` ya no existe (sin `SessionEnd`). Sin `pid` se quedan.
     pub fn prune(&mut self, alive: impl Fn(u32) -> bool) -> Vec<StoreEvent> {
         let mut out = vec![];
@@ -211,6 +280,8 @@ impl SessionStore {
             pending: 0,
             last_assistant_message: None,
             updated_ms: 0,
+            cache: CacheClock::default(),
+            transcript_path: None,
         });
         if !cwd.is_empty() && s.cwd != cwd {
             s.project = project_of(&cwd);
@@ -225,7 +296,35 @@ impl SessionStore {
         if msg.term_program.is_some() {
             s.term_program = msg.term_program.clone();
         }
+        if let Some(p) = msg.payload.get("transcript_path").and_then(Value::as_str) {
+            s.transcript_path = Some(p.to_string());
+        }
         s.updated_ms = now_ms();
+
+        // Solo la conversación principal: los eventos de subagentes llevan `agent_id`.
+        if msg.payload.get("agent_id").is_none() {
+            let source = msg.payload.get("source").and_then(Value::as_str);
+            match (msg.event.as_str(), source) {
+                ("SessionStart", Some("startup" | "clear")) => s.cache = CacheClock::default(),
+                // Tras una compactación por ventana el resumen aún no está en caché: sin dato.
+                ("SessionStart", Some("compact")) if !s.cache.idle_compacted => s.cache = CacheClock::default(),
+                // `auto` también es la compactación por ventana; solo en espera es por inactividad.
+                ("PreCompact", _)
+                    if s.state == SessionState::EnEspera
+                        && msg.payload.get("trigger").and_then(Value::as_str) == Some("auto") =>
+                {
+                    s.cache.idle_compacted = true;
+                }
+                ("UserPromptSubmit", _) => {
+                    s.cache.last_ms = Some(now_ms());
+                    s.cache.idle_compacted = false;
+                }
+                ("PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "Stop", _) => {
+                    s.cache.last_ms = Some(now_ms());
+                }
+                _ => {}
+            }
+        }
 
         let mut out = vec![StoreEvent::Updated(id.clone())];
         match msg.event.as_str() {
@@ -272,6 +371,7 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::CacheClock;
     use crate::protocol::{AGENT_CLAUDE_CODE, PROTOCOL_VERSION};
     use serde_json::json;
 
@@ -373,5 +473,232 @@ mod tests {
                 arg: Some("Task".into())
             }
         );
+    }
+
+    #[test]
+    fn caché_se_renueva_con_eventos_principales() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("SessionStart", json!({})));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, None);
+        for ev in [
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "PostToolUseFailure",
+            "Stop",
+        ] {
+            st.get_mut("s1").unwrap().cache.last_ms = None;
+            st.apply(&msg(ev, json!({})));
+            assert!(
+                st.get("s1").unwrap().cache.last_ms.is_some(),
+                "{ev} debe renovar la caché"
+            );
+        }
+    }
+
+    #[test]
+    fn eventos_de_subagente_no_tocan_la_caché() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({ "agent_id": "a1" })));
+        st.apply(&msg("Stop", json!({ "agent_id": "a1" })));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, None);
+    }
+
+    #[test]
+    fn session_start_clear_vacia_el_reloj() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("SessionStart", json!({ "source": "clear" })));
+        assert_eq!(st.get("s1").unwrap().cache, CacheClock::default());
+    }
+
+    #[test]
+    fn session_start_resume_conserva_el_reloj() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        let antes = st.get("s1").unwrap().cache.last_ms;
+        st.apply(&msg("SessionStart", json!({ "source": "resume" })));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, antes);
+    }
+
+    #[test]
+    fn guarda_la_ruta_del_transcript() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("SessionStart", json!({ "transcript_path": "/t/s1.jsonl" })));
+        st.apply(&msg("Stop", json!({})));
+        assert_eq!(st.get("s1").unwrap().transcript_path.as_deref(), Some("/t/s1.jsonl"));
+    }
+
+    #[test]
+    fn stop_failure_no_toca_la_caché() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        let antes = st.get("s1").unwrap().cache.last_ms;
+        st.apply(&msg("StopFailure", json!({})));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, antes);
+    }
+
+    fn temp(st: &SessionStore) -> Option<crate::cache::CacheTemp> {
+        crate::cache::temperature(&st.get("s1").unwrap().cache, now_ms(), 60)
+    }
+
+    fn auto() -> Value {
+        json!({ "trigger": "auto", "custom_instructions": "" })
+    }
+
+    #[test]
+    fn compactación_auto_en_espera_es_compactada() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        let antes = st.get("s1").unwrap().cache.last_ms;
+        st.apply(&msg("PreCompact", auto()));
+        let s = st.get("s1").unwrap();
+        assert_eq!(s.state, SessionState::EnEspera);
+        assert_eq!(s.cache.last_ms, antes);
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Compactada));
+    }
+
+    #[test]
+    fn compactación_auto_trabajando_no_es_compactada() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        assert!(!st.get("s1").unwrap().cache.idle_compacted);
+        assert_eq!(st.get("s1").unwrap().state, SessionState::Trabajando);
+        st.apply(&msg("PreToolUse", json!({ "tool_name": "AskUserQuestion" })));
+        st.apply(&msg("PreCompact", auto()));
+        assert!(!st.get("s1").unwrap().cache.idle_compacted);
+        assert_eq!(st.get("s1").unwrap().state, SessionState::Pendiente);
+    }
+
+    #[test]
+    fn compactación_manual_no_es_compactada() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg(
+            "PreCompact",
+            json!({ "trigger": "manual", "custom_instructions": "" }),
+        ));
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Caliente));
+    }
+
+    #[test]
+    fn session_start_compact_mantiene_compactada_tras_inactividad() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        let antes = st.get("s1").unwrap().cache.clone();
+        st.apply(&msg("SessionStart", json!({ "source": "compact" })));
+        assert_eq!(st.get("s1").unwrap().cache, antes);
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Compactada));
+    }
+
+    #[test]
+    fn session_start_compact_sin_inactividad_vacia_el_reloj() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        st.apply(&msg("SessionStart", json!({ "source": "compact" })));
+        assert_eq!(st.get("s1").unwrap().cache, CacheClock::default());
+        assert_eq!(temp(&st), None);
+    }
+
+    #[test]
+    fn prompt_tras_compactación_vuelve_a_caliente() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        st.apply(&msg("SessionStart", json!({ "source": "compact" })));
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Caliente));
+    }
+
+    #[test]
+    fn pre_compact_de_subagente_se_ignora() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg("PreCompact", json!({ "trigger": "auto", "agent_id": "a1" })));
+        assert!(!st.get("s1").unwrap().cache.idle_compacted);
+    }
+
+    const AGENTS: &str = r#"[
+        {"id":"dd2521e1","cwd":"/p/turbito","kind":"background","startedAt":1,"sessionId":"bg","name":"Phase 5","state":"blocked"},
+        {"pid":93532,"cwd":"/p/bicosa","kind":"interactive","startedAt":2,"sessionId":"s-idle","name":"Spec","status":"idle"},
+        {"pid":1087,"cwd":"/p/pilas-app","kind":"interactive","startedAt":3,"sessionId":"s-busy","name":"x","status":"busy"},
+        {"cwd":"/p/sin-pid","kind":"interactive","sessionId":"s-nopid","status":"idle"},
+        {"pid":7,"cwd":"/p/sin-id","kind":"interactive","status":"idle"}
+    ]"#;
+
+    #[test]
+    fn parse_agents_solo_interactivas_con_pid_y_session_id() {
+        let found = parse_agents(AGENTS);
+        let ids: Vec<&str> = found.iter().map(|d| d.session_id.as_str()).collect();
+        assert_eq!(ids, ["s-idle", "s-busy"]);
+        assert_eq!(found[0].pid, 93532);
+        assert!(!found[0].busy);
+        assert!(found[1].busy);
+    }
+
+    #[test]
+    fn parse_agents_json_inválido_da_vacío() {
+        assert!(parse_agents("no es json").is_empty());
+        assert!(parse_agents("{}").is_empty());
+    }
+
+    #[test]
+    fn descubierta_ocupada_queda_trabajando() {
+        let mut st = SessionStore::default();
+        for d in parse_agents(AGENTS) {
+            assert!(st.register_discovered(&d));
+        }
+        let busy = st.get("s-busy").unwrap();
+        assert_eq!(busy.state, SessionState::Trabajando);
+        assert_eq!(busy.project, "pilas-app");
+        assert_eq!(busy.pid, Some(1087));
+        assert_eq!(busy.agent, AGENT_CLAUDE_CODE);
+        assert_eq!(st.get("s-idle").unwrap().state, SessionState::EnEspera);
+    }
+
+    #[test]
+    fn descubrir_no_pisa_una_sesión_existente() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        let d = DiscoveredSession {
+            session_id: "s1".into(),
+            cwd: "/otro".into(),
+            pid: 1,
+            busy: false,
+        };
+        assert!(!st.register_discovered(&d));
+        let s = st.get("s1").unwrap();
+        assert_eq!(s.state, SessionState::Trabajando);
+        assert_ne!(s.cwd, "/otro");
+    }
+
+    #[test]
+    fn descubierta_toma_el_reloj_del_transcript() {
+        let mut st = SessionStore::default();
+        let d = DiscoveredSession {
+            session_id: "s1".into(),
+            cwd: "/p".into(),
+            pid: 1,
+            busy: false,
+        };
+        st.register_discovered(&d);
+        assert_eq!(temp(&st), None);
+        let line = json!({
+            "type": "assistant", "isSidechain": false, "timestamp": "2026-10-30T16:25:06.972Z",
+            "message": { "usage": { "cache_creation": { "ephemeral_5m_input_tokens": 10 },
+                "cache_creation_input_tokens": 10, "input_tokens": 2, "output_tokens": 1 } }
+        })
+        .to_string();
+        let parsed = crate::cache::parse_transcript_tail(&line);
+        crate::cache::apply_transcript(&mut st.get_mut("s1").unwrap().cache, &parsed);
+        assert!(temp(&st).is_some());
     }
 }

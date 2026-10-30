@@ -192,7 +192,7 @@ fn unique_name_for_pid(json: &str, pid: u32) -> Option<String> {
 }
 
 /// Salida de `claude agents --json` (sin red, ~0.1 s); None ante cualquier fallo.
-fn agents_json() -> Option<String> {
+pub fn agents_json() -> Option<String> {
     let home = std::env::var("HOME").unwrap_or_default();
     let bin = [
         format!("{home}/.local/bin/claude"),

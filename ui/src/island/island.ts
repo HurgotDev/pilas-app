@@ -80,6 +80,30 @@ function ago(ms: number): string {
   return t("ago.h", { n: Math.floor(min / 60) });
 }
 
+// "m:ss" para la cuenta atrás de una caché que se enfría.
+function clockOf(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// TTL legible ("5m", "1h") para el título del chip.
+function ttlLabel(s: number): string {
+  return s % 3600 === 0 ? `${s / 3600}h` : `${Math.round(s / 60)}m`;
+}
+
+// Chip de caché de una fila; con "enfriándose" lleva `data-expires` para la cuenta atrás de un segundo.
+function cacheChip(c: api.CacheView): string {
+  const left = (c.expires_ms ?? 0) - Date.now();
+  const text =
+    c.temp === "caliente" ? t("cache.warm", { m: Math.floor(left / 60_000) })
+    : c.temp === "enfriandose" ? t("cache.cooling", { time: clockOf(left) })
+    : c.temp === "fria" ? t("cache.cold")
+    : t("cache.compacted");
+  const title = t(c.ttl_detected ? "cache.ttl.detected" : "cache.ttl.estimated", { ttl: ttlLabel(c.ttl_s) });
+  const live = c.temp === "enfriandose" ? ` data-expires="${c.expires_ms}"` : "";
+  return `<span class="cache" data-temp="${c.temp}" title="${title}"${live}>${text}</span>`;
+}
+
 // Texto de last_action; sin argumento, un comando se muestra como "un comando" (i18n).
 function actionText(a: api.LastAction): string {
   const arg = a.arg ?? (a.kind === "bash" ? t("arg.command") : "");
@@ -87,7 +111,7 @@ function actionText(a: api.LastAction): string {
 }
 
 export function mountIsland(root: HTMLElement): void {
-  let snap: api.Snapshot = { sessions: [], mascot: "dormida", pending: [] };
+  let snap: api.Snapshot = { sessions: [], mascot: "dormida", pending: [], cache_mascot: null };
   let open = false;
   let peek = false; // con la isla oculta, el cursor encima muestra la píldora
   let fullUntil = 0; // la pilita se muestra "llena" ~4 s tras terminar una sesión
@@ -112,10 +136,12 @@ export function mountIsland(root: HTMLElement): void {
     <div class="pill">
       <pilas-mascot state="dormida"></pilas-mascot>
       <span class="badge" hidden></span>
+      <button class="cooldown" hidden></button>
     </div>
     <div class="panel"></div>`;
   const mascot = root.querySelector("pilas-mascot") as PilitaMascot;
   const badge = root.querySelector(".badge") as HTMLElement;
+  const cooldown = root.querySelector(".cooldown") as HTMLButtonElement;
   const panel = root.querySelector(".panel") as HTMLElement;
 
   const size = (): Size => (open ? "open" : snap.sessions.length === 0 && !peek ? "hidden" : "pill");
@@ -282,8 +308,39 @@ export function mountIsland(root: HTMLElement): void {
     play("aprobado");
   }
 
+  // Cuenta atrás de los "enfriándose": un solo intervalo, activo solo mientras quede alguno.
+  let coolTimer = 0;
+  function syncCoolTimer(): void {
+    const cooling = snap.sessions.some((s) => s.cache?.temp === "enfriandose");
+    if (cooling && !coolTimer) coolTimer = window.setInterval(tickCooling, 1000);
+    else if (!cooling && coolTimer) { clearInterval(coolTimer); coolTimer = 0; }
+  }
+  // Cuenta atrás de la píldora: la sesión que se enfría y expira antes, solo sin pendientes (el contador manda).
+  function renderCooldown(): void {
+    const next = snap.cache_mascot === "enfriandose" && snap.pending.length === 0
+      ? snap.sessions
+          .filter((s) => s.cache?.temp === "enfriandose")
+          .sort((a, b) => (a.cache!.expires_ms ?? 0) - (b.cache!.expires_ms ?? 0))[0]
+      : undefined;
+    cooldown.hidden = !next;
+    if (!next) return;
+    const time = clockOf((next.cache!.expires_ms ?? 0) - Date.now());
+    cooldown.textContent = time;
+    cooldown.dataset.session = next.session_id;
+    cooldown.setAttribute("aria-label", t("cache.pill", { time }));
+  }
+  function tickCooling(): void {
+    renderCooldown();
+    for (const el of panel.querySelectorAll<HTMLElement>("[data-expires]")) {
+      el.textContent = t("cache.cooling", { time: clockOf(Number(el.dataset.expires) - Date.now()) });
+    }
+  }
+
   function render(): void {
     mascot.state = mascotState();
+    const cache = snap.cache_mascot;
+    if (cache && cache !== "compactada") mascot.setAttribute("cache", cache); else mascot.removeAttribute("cache");
+    renderCooldown();
     badge.hidden = snap.pending.length === 0;
     badge.textContent = String(snap.pending.length);
     if (open) {
@@ -295,10 +352,11 @@ export function mountIsland(root: HTMLElement): void {
                 <span class="dot" data-s="${s.state}" title="${t(STATE_LABEL[s.state])}"></span>
                 <span class="name">${esc(s.project)}</span>
                 <span class="action">${esc(s.last_action ? actionText(s.last_action) : "")}</span>
-                <span class="ago">${ago(s.updated_ms)}</span></div>`)
+                <span class="ago">${ago(s.updated_ms)}</span>${s.cache ? cacheChip(s.cache) : ""}</div>`)
             .join("");
       fitDetail();
     }
+    syncCoolTimer();
     syncWindow();
   }
 
@@ -345,6 +403,11 @@ export function mountIsland(root: HTMLElement): void {
     open = !open;
     render();
   });
+  // Salta a la terminal sin abrir la isla: el clic no llega a la píldora.
+  cooldown.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (cooldown.dataset.session) void api.jumpToSession(cooldown.dataset.session);
+  });
   mascot.addEventListener("pilita-click", (e) => {
     // En alerta no hay reacciones ni sonido; el 3er clic (mareo) suena distinto al toque.
     if (mascot.state !== "alerta") play((e as CustomEvent).detail?.reaction === "mareo" ? "mareo" : "toque");
@@ -383,6 +446,9 @@ export function mountIsland(root: HTMLElement): void {
     }, 60_000);
   });
   api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
+  // El sonido global lo filtra `play`; aquí solo el ajuste propio de la caché.
+  let cacheSound = true;
+  api.onCacheCooling(() => { if (cacheSound) play("frio"); });
   // Skin efectiva en la pilita, en la raíz (su CSS en ui/src/skins), en los sonidos y en su capa de ambiente.
   let current: SkinDef | null = null;
   function applySkin(): void {
@@ -401,6 +467,7 @@ export function mountIsland(root: HTMLElement): void {
     setLang(s.lang);
     configure({ enabled: s.sound_enabled, volume: s.volume });
     openOnPending = s.open_on_pending;
+    cacheSound = s.cache_enabled && s.cache_sound;
     skinChoice = s.skin;
     applySkin();
     render();

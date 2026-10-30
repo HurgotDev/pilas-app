@@ -125,3 +125,16 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     "Christmas"/"Navidad" en Ajustes y en el playground.
   - Verificar: `npm run test:ui` (bordes 30 nov/1 dic y 26/27 dic),
     `cargo test -p pilas`; playground y app con la skin fijada.
+
+## M11 · Temperatura de caché (ver `docs/SPEC.md` → "Temperatura de caché")
+
+Tareas verticales; detalle y criterios en `tasks/plan.md`. En serie salvo T4,
+que es solo UI.
+
+- [x] T1 · Estados de punta a punta con TTL estimado y chip en la lista.
+- [x] T2 · TTL real desde el transcript.
+- [x] T3 · Ajustes y aviso con sonido `frio`.
+- [x] T4 · Pilita con atributo `cache` y cuenta atrás en la píldora.
+- [x] T5 · Compactación: hook `PreCompact`, idle y `SessionStart`.
+- [x] T6 · Descubrir sesiones al arrancar con `claude agents --json`.
+- [x] T7 · README, fragmento de cambios y casillas.

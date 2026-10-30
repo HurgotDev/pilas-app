@@ -9,17 +9,26 @@
       .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
       button { font: inherit; padding: 8px 16px; border-radius: 999px; border: 1px solid #3a3e52; background: none;
                color: inherit; cursor: pointer; }
-      pilas-mascot { height: 240px; }
+      #m { height: 240px; }
+      .pill { display: flex; justify-content: center; gap: 24px; align-items: center; }
+      .pill span { background: #000; height: 32px; padding: 0 10px; border-radius: 0 0 14px 14px; display: flex; align-items: center; }
     </style>
   </head>
   <body>
     <main>
       <pilas-mascot id="m" state="cargando"></pilas-mascot>
+      <!-- tamaños reales: píldora (28 px) e isla abierta (96 px) -->
+      <div class="pill"><span><pilas-mascot state="cargando" style="height: 28px"></pilas-mascot></span>
+        <pilas-mascot state="cargando" style="height: 96px"></pilas-mascot></div>
       <div class="row">
         <button data-s="dormida">Dormida</button><button data-s="cargando">Cargando</button>
         <button data-s="alerta">Alerta</button><button data-s="llena">Llena</button>
       </div>
       <div class="row" id="skins"></div>
+      <div class="row">
+        <button data-c="">Sin caché</button><button data-c="caliente">Caliente</button>
+        <button data-c="enfriandose">Enfriándose</button><button data-c="fria">Fría</button>
+      </div>
       <div class="row">
         <button data-r="saludo">Saludo</button><button data-r="aplastada">Aplastada</button>
         <button data-r="mareo">Mareo</button>
@@ -27,7 +36,7 @@
       <div class="row">
         <button data-snd="alerta">♪ alerta</button><button data-snd="listo">♪ listo</button>
         <button data-snd="aprobado">♪ aprobado</button><button data-snd="denegado">♪ denegado</button>
-        <button data-snd="toque">♪ toque</button>
+        <button data-snd="toque">♪ toque</button><button data-snd="frio">♪ frio</button>
       </div>
     </main>
     <script type="module">
@@ -38,8 +47,12 @@
       document.getElementById("skins").innerHTML = Object.values(SKINS)
         .map((k) => `<button data-k="${k.id}">${t(k.label)}</button>`).join("");
       const m = document.getElementById("m");
-      document.querySelectorAll("[data-s]").forEach((b) => (b.onclick = () => (m.state = b.dataset.s)));
-      document.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => (m.skin = b.dataset.k)));
+      const all = document.querySelectorAll("pilas-mascot");
+      const each = (fn) => () => all.forEach(fn);
+      document.querySelectorAll("[data-s]").forEach((b) => (b.onclick = each((x) => (x.state = b.dataset.s))));
+      document.querySelectorAll("[data-k]").forEach((b) => (b.onclick = each((x) => (x.skin = b.dataset.k))));
+      document.querySelectorAll("[data-c]").forEach((b) => (b.onclick = each((x) =>
+        b.dataset.c ? x.setAttribute("cache", b.dataset.c) : x.removeAttribute("cache"))));
       document.querySelectorAll("[data-r]").forEach((b) => (b.onclick = () => m.react(b.dataset.r)));
       document.querySelectorAll("[data-snd]").forEach((b) => (b.onclick = () => play(b.dataset.snd)));
     </script>

@@ -2,7 +2,7 @@
 import { SKINS, type Skin } from "../skins/index.ts";
 import type { SkinDef } from "../skins/types.ts";
 
-export type Sound = "alerta" | "recordatorio" | "listo" | "aprobado" | "denegado" | "toque" | "mareo";
+export type Sound = "alerta" | "recordatorio" | "listo" | "aprobado" | "denegado" | "toque" | "mareo" | "frio";
 
 export interface Note { f: number; t: number; d: number; type?: OscillatorType; to?: number }
 
@@ -14,6 +14,7 @@ const CLASSIC: Record<Sound, Note[]> = {
   denegado:     [{ f: 330, t: 0, d: 0.12, to: 196 }],
   toque:        [{ f: 520, t: 0, d: 0.15, type: "triangle", to: 260 }],
   mareo:        [{ f: 1320, t: 0, d: 0.08, type: "triangle" }, { f: 990, t: 0.09, d: 0.08, type: "triangle" }, { f: 1245, t: 0.18, d: 0.08, type: "triangle" }, { f: 932, t: 0.27, d: 0.08, type: "triangle" }, { f: 1175, t: 0.36, d: 0.08, type: "triangle" }, { f: 880, t: 0.45, d: 0.08, type: "triangle" }, { f: 1109, t: 0.54, d: 0.08, type: "triangle" }, { f: 831, t: 0.63, d: 0.1, type: "triangle" }],
+  frio:         [{ f: 988, t: 0, d: 0.14, type: "triangle" }, { f: 784, t: 0.16, d: 0.14, type: "triangle" }, { f: 587, t: 0.32, d: 0.18, type: "triangle" }],
 };
 
 /** Notas de un sonido con una skin: las que la skin no redefine son las clásicas. */
