@@ -8,7 +8,7 @@ Detalle en `tasks/plan.md`.
 - [x] T3 · Ajustes y aviso con sonido (fullstack)
 - [x] T4 · Pilita y cuenta atrás en la píldora (front)
 - [x] T5 · Compactación: PreCompact, idle, SessionStart (back)
-- [ ] T6 · Descubrir sesiones al arrancar (back)
+- [x] T6 · Descubrir sesiones al arrancar (back)
 - [ ] Checkpoint 2 · prueba a mano completa, varias sesiones, kill
 - [ ] T7 · README, fragmento de cambios, casillas (docs)
 - [ ] Checkpoint final · revisión, build, PR a develop

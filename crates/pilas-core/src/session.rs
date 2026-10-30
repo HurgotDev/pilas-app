@@ -70,6 +70,35 @@ pub struct SessionStore {
     sessions: HashMap<String, Session>,
 }
 
+/// Sesión interactiva viva según `claude agents --json` (Pilas abierta tarde).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveredSession {
+    pub session_id: String,
+    pub cwd: String,
+    pub pid: u32,
+    pub busy: bool,
+}
+
+/// Solo entradas `interactive` con `pid` y `sessionId`; JSON inválido → ninguna.
+pub fn parse_agents(json: &str) -> Vec<DiscoveredSession> {
+    let Ok(Value::Array(entries)) = serde_json::from_str::<Value>(json) else {
+        return vec![];
+    };
+    let str_of = |e: &Value, k: &str| e.get(k).and_then(Value::as_str).map(str::to_string);
+    entries
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_str) == Some("interactive"))
+        .filter_map(|e| {
+            Some(DiscoveredSession {
+                session_id: str_of(e, "sessionId").filter(|s| !s.is_empty())?,
+                cwd: str_of(e, "cwd").unwrap_or_default(),
+                pid: u32::try_from(e.get("pid")?.as_u64()?).ok()?,
+                busy: e.get("status").and_then(Value::as_str) == Some("busy"),
+            })
+        })
+        .collect()
+}
+
 /// Reloj de pared en milisegundos desde UNIX_EPOCH.
 pub fn now_ms() -> u64 {
     SystemTime::now()
@@ -163,6 +192,38 @@ impl SessionStore {
 
     pub fn remove(&mut self, id: &str) -> Option<Session> {
         self.sessions.remove(id)
+    }
+
+    /// Registra una sesión descubierta al arrancar si aún no se conoce (los eventos mandan).
+    pub fn register_discovered(&mut self, d: &DiscoveredSession) -> bool {
+        if self.sessions.contains_key(&d.session_id) {
+            return false;
+        }
+        let state = if d.busy {
+            SessionState::Trabajando
+        } else {
+            SessionState::EnEspera
+        };
+        self.sessions.insert(
+            d.session_id.clone(),
+            Session {
+                session_id: d.session_id.clone(),
+                agent: protocol::AGENT_CLAUDE_CODE.into(),
+                project: project_of(&d.cwd),
+                cwd: d.cwd.clone(),
+                tty: None,
+                pid: Some(d.pid),
+                term_program: None,
+                state,
+                last_action: None,
+                pending: 0,
+                last_assistant_message: None,
+                updated_ms: now_ms(),
+                cache: CacheClock::default(),
+                transcript_path: None,
+            },
+        );
+        true
     }
 
     /// Quita las sesiones cuyo `pid` ya no existe (sin `SessionEnd`). Sin `pid` se quedan.
@@ -563,5 +624,81 @@ mod tests {
         st.apply(&msg("Stop", json!({})));
         st.apply(&msg("PreCompact", json!({ "trigger": "auto", "agent_id": "a1" })));
         assert!(!st.get("s1").unwrap().cache.idle_compacted);
+    }
+
+    const AGENTS: &str = r#"[
+        {"id":"dd2521e1","cwd":"/p/turbito","kind":"background","startedAt":1,"sessionId":"bg","name":"Phase 5","state":"blocked"},
+        {"pid":93532,"cwd":"/p/bicosa","kind":"interactive","startedAt":2,"sessionId":"s-idle","name":"Spec","status":"idle"},
+        {"pid":1087,"cwd":"/p/pilas-app","kind":"interactive","startedAt":3,"sessionId":"s-busy","name":"x","status":"busy"},
+        {"cwd":"/p/sin-pid","kind":"interactive","sessionId":"s-nopid","status":"idle"},
+        {"pid":7,"cwd":"/p/sin-id","kind":"interactive","status":"idle"}
+    ]"#;
+
+    #[test]
+    fn parse_agents_solo_interactivas_con_pid_y_session_id() {
+        let found = parse_agents(AGENTS);
+        let ids: Vec<&str> = found.iter().map(|d| d.session_id.as_str()).collect();
+        assert_eq!(ids, ["s-idle", "s-busy"]);
+        assert_eq!(found[0].pid, 93532);
+        assert!(!found[0].busy);
+        assert!(found[1].busy);
+    }
+
+    #[test]
+    fn parse_agents_json_inválido_da_vacío() {
+        assert!(parse_agents("no es json").is_empty());
+        assert!(parse_agents("{}").is_empty());
+    }
+
+    #[test]
+    fn descubierta_ocupada_queda_trabajando() {
+        let mut st = SessionStore::default();
+        for d in parse_agents(AGENTS) {
+            assert!(st.register_discovered(&d));
+        }
+        let busy = st.get("s-busy").unwrap();
+        assert_eq!(busy.state, SessionState::Trabajando);
+        assert_eq!(busy.project, "pilas-app");
+        assert_eq!(busy.pid, Some(1087));
+        assert_eq!(busy.agent, AGENT_CLAUDE_CODE);
+        assert_eq!(st.get("s-idle").unwrap().state, SessionState::EnEspera);
+    }
+
+    #[test]
+    fn descubrir_no_pisa_una_sesión_existente() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        let d = DiscoveredSession {
+            session_id: "s1".into(),
+            cwd: "/otro".into(),
+            pid: 1,
+            busy: false,
+        };
+        assert!(!st.register_discovered(&d));
+        let s = st.get("s1").unwrap();
+        assert_eq!(s.state, SessionState::Trabajando);
+        assert_ne!(s.cwd, "/otro");
+    }
+
+    #[test]
+    fn descubierta_toma_el_reloj_del_transcript() {
+        let mut st = SessionStore::default();
+        let d = DiscoveredSession {
+            session_id: "s1".into(),
+            cwd: "/p".into(),
+            pid: 1,
+            busy: false,
+        };
+        st.register_discovered(&d);
+        assert_eq!(temp(&st), None);
+        let line = json!({
+            "type": "assistant", "isSidechain": false, "timestamp": "2026-10-30T16:25:06.972Z",
+            "message": { "usage": { "cache_creation": { "ephemeral_5m_input_tokens": 10 },
+                "cache_creation_input_tokens": 10, "input_tokens": 2, "output_tokens": 1 } }
+        })
+        .to_string();
+        let parsed = crate::cache::parse_transcript_tail(&line);
+        crate::cache::apply_transcript(&mut st.get_mut("s1").unwrap().cache, &parsed);
+        assert!(temp(&st).is_some());
     }
 }

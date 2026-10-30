@@ -136,5 +136,5 @@ que es solo UI.
 - [x] T3 · Ajustes y aviso con sonido `frio`.
 - [x] T4 · Pilita con atributo `cache` y cuenta atrás en la píldora.
 - [x] T5 · Compactación: hook `PreCompact`, idle y `SessionStart`.
-- [ ] T6 · Descubrir sesiones al arrancar con `claude agents --json`.
+- [x] T6 · Descubrir sesiones al arrancar con `claude agents --json`.
 - [ ] T7 · README, fragmento de cambios y casillas.

@@ -13,7 +13,7 @@ mod updates;
 use pilas_core::cache::{self, CacheClock, CacheTemp};
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
-use pilas_core::session::{now_ms, MascotState, Session, SessionStore, StoreEvent};
+use pilas_core::session::{now_ms, parse_agents, MascotState, Session, SessionStore, StoreEvent};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -359,6 +359,56 @@ pub(crate) fn spawn_transcript_read(app: AppHandle, session_id: String, path: St
     });
 }
 
+/// Pilas abierta tarde: registra las sesiones vivas que aún no conoce y arranca su reloj.
+fn spawn_discovery(app: AppHandle) {
+    std::thread::spawn(move || {
+        let Some(json) = pilas_jump::agents_json() else {
+            return;
+        };
+        let found = parse_agents(&json);
+        let mut reads = vec![];
+        {
+            let state = app.state::<AppState>();
+            let mut inner = state.0.lock().unwrap();
+            let enabled = inner.settings.cache_enabled;
+            for d in &found {
+                if !inner.store.register_discovered(d) {
+                    continue;
+                }
+                let path = find_transcript(&d.session_id);
+                if let (Some(s), Some(p)) = (inner.store.get_mut(&d.session_id), &path) {
+                    s.transcript_path = Some(p.clone());
+                }
+                if let (true, Some(p)) = (enabled, path) {
+                    reads.push((d.session_id.clone(), p));
+                }
+            }
+        }
+        emit_snapshot(&app);
+        for (id, path) in reads {
+            spawn_transcript_read(app.clone(), id, path, 0);
+        }
+    });
+}
+
+/// `<base>/projects/*/<sessionId>.jsonl`, con base `CLAUDE_CONFIG_DIR` o `~/.claude`.
+fn find_transcript(session_id: &str) -> Option<String> {
+    // El id acaba en una ruta: nada de separadores ni `..`.
+    if session_id.contains(['/', '\\']) || session_id.contains("..") {
+        return None;
+    }
+    let base = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".claude")))?;
+    let file = format!("{session_id}.jsonl");
+    std::fs::read_dir(base.join("projects"))
+        .ok()?
+        .flatten()
+        .map(|e| e.path().join(&file))
+        .find(|p| p.is_file())
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Últimos `max` bytes de un archivo como texto (UTF-8 con pérdida).
 fn read_tail(path: &str, max: u64) -> Option<String> {
     use std::io::{Read, Seek, SeekFrom};
@@ -590,6 +640,7 @@ pub fn run() {
             server::start(app.handle().clone())?;
             app.state::<AppState>().0.lock().unwrap().cache_ttl_override = cache_ttl_override();
             spawn_prune(app.handle().clone());
+            spawn_discovery(app.handle().clone());
             spawn_cache_watch(app.handle().clone());
             setup_tray(app.handle())?;
             // Recopia el hook si la app trae una versión nueva (no toca settings.json).
