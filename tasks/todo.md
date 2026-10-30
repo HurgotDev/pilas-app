@@ -11,4 +11,4 @@ Detalle en `tasks/plan.md`.
 - [x] T6 · Descubrir sesiones al arrancar (back)
 - [ ] Checkpoint 2 · prueba a mano completa, varias sesiones, kill
 - [x] T7 · README, fragmento de cambios, casillas (docs)
-- [ ] Checkpoint final · revisión, build, PR a develop
+- [x] Checkpoint final · revisión, build, PR a develop
