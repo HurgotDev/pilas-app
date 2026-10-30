@@ -103,9 +103,11 @@ fn cache_view(clock: &CacheClock, now: u64, ttl_override: Option<u64>, warn_s: u
         ttl_detected: clock.ttl_detected && ttl_override.is_none(),
         ..clock.clone()
     };
+    let temp = cache::temperature(&clock, now, warn_s)?;
     Some(CacheView {
-        temp: cache::temperature(&clock, now, warn_s)?,
-        expires_ms: cache::expires_ms(&clock),
+        temp,
+        // compactada no expira: no hay cuenta atrás que mostrar
+        expires_ms: cache::expires_ms(&clock).filter(|_| temp != CacheTemp::Compactada),
         ttl_s: cache::ttl_of(&clock),
         ttl_detected: clock.ttl_detected,
     })
@@ -624,6 +626,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compactada_sin_cuenta_atras_ni_pilita() {
+        let clock = CacheClock {
+            last_ms: Some(1_000),
+            idle_compacted: true,
+            ..CacheClock::default()
+        };
+        let view = cache_view(&clock, 2_000, None, 300).unwrap();
+        assert_eq!(view.temp, CacheTemp::Compactada);
+        assert_eq!(view.expires_ms, None);
+        assert_eq!(actionable_rank(CacheTemp::Compactada), None);
+    }
 
     #[test]
     fn enfriandose_avisa_una_vez_por_episodio() {

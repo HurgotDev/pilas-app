@@ -88,6 +88,8 @@ mod tests {
         assert!(is_blocking("PreToolUse", &json!({"tool_name": "AskUserQuestion"})));
         assert!(!is_blocking("PreToolUse", &json!({"tool_name": "Edit"})));
         assert!(!is_blocking("Stop", &json!({})));
+        // PreCompact nunca bloquea: bloquearlo impediría la compactación.
+        assert!(!is_blocking("PreCompact", &json!({ "trigger": "auto" })));
     }
 
     #[test]

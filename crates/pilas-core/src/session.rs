@@ -245,7 +245,20 @@ impl SessionStore {
             let source = msg.payload.get("source").and_then(Value::as_str);
             match (msg.event.as_str(), source) {
                 ("SessionStart", Some("startup" | "clear")) => s.cache = CacheClock::default(),
-                ("UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "Stop", _) => {
+                // Tras una compactación por ventana el resumen aún no está en caché: sin dato.
+                ("SessionStart", Some("compact")) if !s.cache.idle_compacted => s.cache = CacheClock::default(),
+                // `auto` también es la compactación por ventana; solo en espera es por inactividad.
+                ("PreCompact", _)
+                    if s.state == SessionState::EnEspera
+                        && msg.payload.get("trigger").and_then(Value::as_str) == Some("auto") =>
+                {
+                    s.cache.idle_compacted = true;
+                }
+                ("UserPromptSubmit", _) => {
+                    s.cache.last_ms = Some(now_ms());
+                    s.cache.idle_compacted = false;
+                }
+                ("PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "Stop", _) => {
                     s.cache.last_ms = Some(now_ms());
                 }
                 _ => {}
@@ -462,5 +475,93 @@ mod tests {
         let antes = st.get("s1").unwrap().cache.last_ms;
         st.apply(&msg("StopFailure", json!({})));
         assert_eq!(st.get("s1").unwrap().cache.last_ms, antes);
+    }
+
+    fn temp(st: &SessionStore) -> Option<crate::cache::CacheTemp> {
+        crate::cache::temperature(&st.get("s1").unwrap().cache, now_ms(), 60)
+    }
+
+    fn auto() -> Value {
+        json!({ "trigger": "auto", "custom_instructions": "" })
+    }
+
+    #[test]
+    fn compactación_auto_en_espera_es_compactada() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        let antes = st.get("s1").unwrap().cache.last_ms;
+        st.apply(&msg("PreCompact", auto()));
+        let s = st.get("s1").unwrap();
+        assert_eq!(s.state, SessionState::EnEspera);
+        assert_eq!(s.cache.last_ms, antes);
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Compactada));
+    }
+
+    #[test]
+    fn compactación_auto_trabajando_no_es_compactada() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        assert!(!st.get("s1").unwrap().cache.idle_compacted);
+        assert_eq!(st.get("s1").unwrap().state, SessionState::Trabajando);
+        st.apply(&msg("PreToolUse", json!({ "tool_name": "AskUserQuestion" })));
+        st.apply(&msg("PreCompact", auto()));
+        assert!(!st.get("s1").unwrap().cache.idle_compacted);
+        assert_eq!(st.get("s1").unwrap().state, SessionState::Pendiente);
+    }
+
+    #[test]
+    fn compactación_manual_no_es_compactada() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg(
+            "PreCompact",
+            json!({ "trigger": "manual", "custom_instructions": "" }),
+        ));
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Caliente));
+    }
+
+    #[test]
+    fn session_start_compact_mantiene_compactada_tras_inactividad() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        let antes = st.get("s1").unwrap().cache.clone();
+        st.apply(&msg("SessionStart", json!({ "source": "compact" })));
+        assert_eq!(st.get("s1").unwrap().cache, antes);
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Compactada));
+    }
+
+    #[test]
+    fn session_start_compact_sin_inactividad_vacia_el_reloj() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        st.apply(&msg("SessionStart", json!({ "source": "compact" })));
+        assert_eq!(st.get("s1").unwrap().cache, CacheClock::default());
+        assert_eq!(temp(&st), None);
+    }
+
+    #[test]
+    fn prompt_tras_compactación_vuelve_a_caliente() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg("PreCompact", auto()));
+        st.apply(&msg("SessionStart", json!({ "source": "compact" })));
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        assert_eq!(temp(&st), Some(crate::cache::CacheTemp::Caliente));
+    }
+
+    #[test]
+    fn pre_compact_de_subagente_se_ignora() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("Stop", json!({})));
+        st.apply(&msg("PreCompact", json!({ "trigger": "auto", "agent_id": "a1" })));
+        assert!(!st.get("s1").unwrap().cache.idle_compacted);
     }
 }

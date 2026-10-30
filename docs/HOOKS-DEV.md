@@ -23,6 +23,7 @@ Crea `~/pilas-sandbox/.claude/settings.local.json` (la ruta del binario debe ser
     "Notification":     [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
     "Stop":             [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
     "StopFailure":      [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
+    "PreCompact":       [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }],
     "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "/RUTA/target/debug/pilas-hook", "args": [] }] }]
   }
 }

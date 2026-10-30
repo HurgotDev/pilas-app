@@ -7,7 +7,7 @@ Detalle en `tasks/plan.md`.
 - [x] T2 · TTL real desde el transcript (back)
 - [x] T3 · Ajustes y aviso con sonido (fullstack)
 - [ ] T4 · Pilita y cuenta atrás en la píldora (front)
-- [ ] T5 · Compactación: PreCompact, idle, SessionStart (back)
+- [x] T5 · Compactación: PreCompact, idle, SessionStart (back)
 - [ ] T6 · Descubrir sesiones al arrancar (back)
 - [ ] Checkpoint 2 · prueba a mano completa, varias sesiones, kill
 - [ ] T7 · README, fragmento de cambios, casillas (docs)

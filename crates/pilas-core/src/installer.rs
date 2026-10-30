@@ -21,6 +21,8 @@ const EVENTS: &[(&str, bool, Option<u64>)] = &[
     ("Notification", false, None),
     ("Stop", false, None),
     ("StopFailure", false, None),
+    // Solo para detectar la compactación por inactividad; nunca responde (no la bloquea).
+    ("PreCompact", false, None),
     ("SessionEnd", false, None),
 ];
 
@@ -236,11 +238,11 @@ mod tests {
     }
 
     #[test]
-    fn instala_en_objeto_vacio_con_los_nueve_eventos() {
+    fn instala_en_objeto_vacio_con_los_diez_eventos() {
         let out = install(&json!({}), BIN).unwrap();
         let hooks = out["hooks"].as_object().unwrap();
-        assert_eq!(hooks.len(), 9);
-        assert_eq!(count_pilas(&out), 9);
+        assert_eq!(hooks.len(), 10);
+        assert_eq!(count_pilas(&out), 10);
         let pre = &out["hooks"]["PreToolUse"][0];
         assert_eq!(pre["matcher"], "*");
         assert_eq!(pre["hooks"][0]["timeout"], 3600);
@@ -284,7 +286,7 @@ mod tests {
         let una = install(&ajeno, BIN).unwrap();
         let dos = install(&una, BIN).unwrap();
         assert_eq!(una, dos);
-        assert_eq!(count_pilas(&dos), 9);
+        assert_eq!(count_pilas(&dos), 10);
     }
 
     #[test]
@@ -292,7 +294,7 @@ mod tests {
         let vieja = "/Applications/Pilas.app/Contents/Pilas/bin/pilas-hook";
         let con_vieja = install(&json!({}), vieja).unwrap();
         let nueva = install(&con_vieja, BIN).unwrap();
-        assert_eq!(count_pilas(&nueva), 9);
+        assert_eq!(count_pilas(&nueva), 10);
         assert_eq!(nueva, install(&json!({}), BIN).unwrap());
     }
 
@@ -333,6 +335,33 @@ mod tests {
         // ruta ajena a Pilas: no es nuestra
         let ajena = install(&vacio, "/otra/pilas-hook").unwrap();
         assert_eq!(status(&ajena, BIN), HookStatus::Missing);
+    }
+
+    #[test]
+    fn pre_compact_se_instala_y_quita_sin_tocar_lo_ajeno() {
+        let ajeno = json!({ "hooks": [{ "type": "command", "command": "/usr/bin/aviso" }] });
+        let settings = json!({ "hooks": { "PreCompact": [ajeno.clone()] } });
+        let out = install(&settings, BIN).unwrap();
+        let pre = out["hooks"]["PreCompact"].as_array().unwrap();
+        assert_eq!(pre.len(), 2);
+        assert_eq!(pre[0], ajeno);
+        assert!(pre[1].get("matcher").is_none());
+        assert_eq!(pre[1]["hooks"][0]["command"], BIN);
+        assert!(pre[1]["hooks"][0].get("timeout").is_none());
+        assert_eq!(uninstall(&out, BIN).unwrap(), settings);
+    }
+
+    #[test]
+    fn instalación_previa_sin_pre_compact_necesita_reparar() {
+        let mut vieja = install(&json!({}), BIN).unwrap();
+        vieja["hooks"].as_object_mut().unwrap().remove("PreCompact");
+        assert_eq!(status(&vieja, BIN), HookStatus::NeedsRepair);
+        // el diff de reparar solo añade líneas (las de PreCompact)
+        let antes = serde_json::to_string_pretty(&vieja).unwrap();
+        let despues = serde_json::to_string_pretty(&install(&vieja, BIN).unwrap()).unwrap();
+        let diff = line_diff(&antes, &despues);
+        assert!(diff.iter().all(|l| l.op != '-'));
+        assert!(diff.iter().any(|l| l.op == '+' && l.text.contains("PreCompact")));
     }
 
     #[test]
