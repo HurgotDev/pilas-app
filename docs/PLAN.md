@@ -125,3 +125,31 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
     "Christmas"/"Navidad" en Ajustes y en el playground.
   - Verificar: `npm run test:ui` (bordes 30 nov/1 dic y 26/27 dic),
     `cargo test -p pilas`; playground y app con la skin fijada.
+
+## M11 · Temperatura de caché (ver `docs/SPEC.md` → "Temperatura de caché")
+
+Orden: T1 → T2 → T3 → T4. T3 puede empezar con T2 a medias: el contrato de
+`Snapshot` está fijado en la spec.
+
+- [ ] T1 · Núcleo en `pilas-core`.
+  - `cache.rs`: `CacheTemp`, `CacheClock`, `temperature(clock, now, warn)`
+    y `parse_transcript_tail(text)`; reloj en `Session` aplicado desde
+    `SessionStore::apply`; `PreCompact` en `EVENTS` del instalador.
+  - Verificar: `cargo test -p pilas-core` con los casos de la spec;
+    `cargo clippy --workspace -- -D warnings`.
+- [ ] T2 · App Tauri.
+  - Ajustes `cache_enabled`, `cache_warn_min`, `cache_sound`; `cache` y
+    `cache_mascot` en `Snapshot`; lectura del transcript tras `Stop`, en
+    `resume` y en sesiones nuevas; descubrimiento con `claude agents --json`
+    al arrancar; revisión cada 5 s con `pilas://cache-cooling`;
+    `PILAS_CACHE_TTL_SECS` solo en debug.
+  - Verificar: `cargo test -p pilas`; `npm run app` con el override.
+- [ ] T3 · UI.
+  - `api.ts`; chip en la lista; cuenta atrás en la píldora que salta a la
+    terminal; atributo `cache` en `pilita.ts` y en el playground; sonido
+    `frio` en `sfx.ts`; tres ajustes en `settings.ts`; textos en `i18n.ts`.
+  - Verificar: `npm run typecheck`, `npm run test:ui`, playground.
+- [ ] T4 · Docs y cierre.
+  - `README.md` (función, ajustes, hook `PreCompact`, lectura local del
+    transcript), `.changes/cache-temperature.md` (`bump: minor`), casillas.
+  - Verificar: prueba a mano de la spec; releer el README.
