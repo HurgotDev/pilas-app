@@ -2,7 +2,7 @@
 
 Detalle en `tasks/plan.md`.
 
-- [ ] T1 · Estados de punta a punta con TTL estimado (fullstack)
+- [x] T1 · Estados de punta a punta con TTL estimado (fullstack)
 - [ ] Checkpoint 1 · tests, clippy, typecheck, prueba con override
 - [ ] T2 · TTL real desde el transcript (back)
 - [ ] T3 · Ajustes y aviso con sonido (fullstack)

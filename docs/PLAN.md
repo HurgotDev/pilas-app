@@ -131,7 +131,7 @@ Orden: T1 → (T2 ∥ T3) → T4 → T5. T2 y T3 tocan archivos distintos.
 Tareas verticales; detalle y criterios en `tasks/plan.md`. En serie salvo T4,
 que es solo UI.
 
-- [ ] T1 · Estados de punta a punta con TTL estimado y chip en la lista.
+- [x] T1 · Estados de punta a punta con TTL estimado y chip en la lista.
 - [ ] T2 · TTL real desde el transcript.
 - [ ] T3 · Ajustes y aviso con sonido `frio`.
 - [ ] T4 · Pilita con atributo `cache` y cuenta atrás en la píldora.

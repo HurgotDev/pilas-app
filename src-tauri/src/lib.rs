@@ -10,9 +10,10 @@ mod server;
 mod settings;
 mod updates;
 
+use pilas_core::cache::{self, CacheClock, CacheTemp};
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
-use pilas_core::session::{MascotState, Session, SessionStore, StoreEvent};
+use pilas_core::session::{now_ms, MascotState, Session, SessionStore, StoreEvent};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -50,7 +51,12 @@ pub(crate) struct Inner {
     pub terminal_ids: HashMap<String, String>,
     /// Última versión nueva encontrada (`None` = al día o sin comprobar).
     pub update: Option<updates::UpdateInfo>,
+    /// TTL forzado con `PILAS_CACHE_TTL_SECS` (solo en compilaciones de depuración).
+    pub cache_ttl_override: Option<u64>,
 }
+
+/// Umbral de aviso "enfriándose" (5 min); pasará a ser un ajuste en T3.
+const CACHE_WARN_S: u64 = 300;
 
 #[derive(Default)]
 pub struct AppState(pub(crate) Mutex<Inner>);
@@ -67,11 +73,54 @@ pub struct PendingView {
     pub permission_suggestions: Option<Value>,
 }
 
+/// Estado de caché de una sesión para la UI.
+#[derive(Serialize, Clone)]
+pub struct CacheView {
+    pub temp: CacheTemp,
+    pub expires_ms: Option<u64>,
+    pub ttl_s: u64,
+    pub ttl_detected: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SessionView {
+    #[serde(flatten)]
+    pub session: Session,
+    pub cache: Option<CacheView>,
+}
+
 #[derive(Serialize, Clone)]
 pub struct Snapshot {
-    pub sessions: Vec<Session>,
+    pub sessions: Vec<SessionView>,
     pub mascot: MascotState,
     pub pending: Vec<PendingView>,
+    /// Peor estado accionable entre las sesiones (`enfriandose` > `fria` > `caliente`).
+    pub cache_mascot: Option<CacheTemp>,
+}
+
+/// Vista de caché de un reloj en `now`; `None` si no hay estado que mostrar.
+fn cache_view(clock: &CacheClock, now: u64, ttl_override: Option<u64>) -> Option<CacheView> {
+    let clock = CacheClock {
+        ttl_s: ttl_override.or(clock.ttl_s),
+        ttl_detected: clock.ttl_detected && ttl_override.is_none(),
+        ..clock.clone()
+    };
+    Some(CacheView {
+        temp: cache::temperature(&clock, now, CACHE_WARN_S)?,
+        expires_ms: cache::expires_ms(&clock),
+        ttl_s: cache::ttl_of(&clock),
+        ttl_detected: clock.ttl_detected,
+    })
+}
+
+/// Rango de lo accionable; `None` para estados que no avisan (compactada).
+fn actionable_rank(temp: CacheTemp) -> Option<u8> {
+    match temp {
+        CacheTemp::Caliente => Some(0),
+        CacheTemp::Fria => Some(1),
+        CacheTemp::Enfriandose => Some(2),
+        CacheTemp::Compactada => None,
+    }
 }
 
 pub(crate) fn snapshot(inner: &Inner) -> Snapshot {
@@ -99,10 +148,28 @@ pub(crate) fn snapshot(inner: &Inner) -> Snapshot {
             })
         })
         .collect();
+    let now = now_ms();
+    let ttl_override = inner.cache_ttl_override;
+    let sessions: Vec<SessionView> = inner
+        .store
+        .list()
+        .into_iter()
+        .map(|s| SessionView {
+            cache: cache_view(&s.cache, now, ttl_override),
+            session: s.clone(),
+        })
+        .collect();
+    let cache_mascot = sessions
+        .iter()
+        .filter_map(|s| s.cache.as_ref().map(|c| c.temp))
+        .filter_map(|t| actionable_rank(t).map(|r| (r, t)))
+        .max_by_key(|(r, _)| *r)
+        .map(|(_, t)| t);
     Snapshot {
-        sessions: inner.store.list().into_iter().cloned().collect(),
+        sessions,
         mascot: inner.store.mascot_state(),
         pending,
+        cache_mascot,
     }
 }
 
@@ -217,6 +284,39 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
 fn pid_alive(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else { return false };
     unsafe { libc::kill(pid, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
+}
+
+/// Cada 5 s recalcula la temperatura de las cachés y emite el snapshot solo si algún estado cambió.
+fn spawn_cache_watch(app: AppHandle) {
+    std::thread::spawn(move || {
+        let mut last = None;
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            let current = {
+                let state = app.state::<AppState>();
+                let inner = state.0.lock().unwrap();
+                let snap = snapshot(&inner);
+                let temps: Vec<_> = snap
+                    .sessions
+                    .iter()
+                    .map(|s| (s.session.session_id.clone(), s.cache.as_ref().map(|c| c.temp)))
+                    .collect();
+                (temps, snap.cache_mascot)
+            };
+            if last.as_ref() != Some(&current) {
+                last = Some(current);
+                emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+            }
+        }
+    });
+}
+
+/// `PILAS_CACHE_TTL_SECS` fuerza el TTL de todas las sesiones; solo en depuración.
+fn cache_ttl_override() -> Option<u64> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    std::env::var("PILAS_CACHE_TTL_SECS").ok()?.parse().ok()
 }
 
 /// Cada 30 s quita las sesiones cuyo proceso ya no existe (sin SessionEnd).
@@ -427,7 +527,9 @@ pub fn run() {
             panel::watch_screens(move || apply_layout(&handle));
 
             server::start(app.handle().clone())?;
+            app.state::<AppState>().0.lock().unwrap().cache_ttl_override = cache_ttl_override();
             spawn_prune(app.handle().clone());
+            spawn_cache_watch(app.handle().clone());
             setup_tray(app.handle())?;
             // Recopia el hook si la app trae una versión nueva (no toca settings.json).
             std::thread::spawn(hooks::refresh_hook);

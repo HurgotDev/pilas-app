@@ -5,6 +5,7 @@
 //!   Trabajando ─StopFailure→ Error ─UserPromptSubmit→ Trabajando
 //!   SessionEnd en cualquier estado → la sesión se elimina
 
+use crate::cache::CacheClock;
 use crate::protocol::{self, HookMessage};
 use serde::Serialize;
 use serde_json::Value;
@@ -48,6 +49,9 @@ pub struct Session {
     pub last_assistant_message: Option<String>,
     /// Milisegundos desde UNIX_EPOCH del último evento.
     pub updated_ms: u64,
+    /// Reloj de la caché del prompt; la vista (`cache::temperature`) la construye la app.
+    #[serde(skip)]
+    pub cache: CacheClock,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +67,8 @@ pub struct SessionStore {
     sessions: HashMap<String, Session>,
 }
 
-fn now_ms() -> u64 {
+/// Reloj de pared en milisegundos desde UNIX_EPOCH.
+pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -211,6 +216,7 @@ impl SessionStore {
             pending: 0,
             last_assistant_message: None,
             updated_ms: 0,
+            cache: CacheClock::default(),
         });
         if !cwd.is_empty() && s.cwd != cwd {
             s.project = project_of(&cwd);
@@ -226,6 +232,18 @@ impl SessionStore {
             s.term_program = msg.term_program.clone();
         }
         s.updated_ms = now_ms();
+
+        // Solo la conversación principal: los eventos de subagentes llevan `agent_id`.
+        if msg.payload.get("agent_id").is_none() {
+            let source = msg.payload.get("source").and_then(Value::as_str);
+            match (msg.event.as_str(), source) {
+                ("SessionStart", Some("startup" | "clear")) => s.cache = CacheClock::default(),
+                ("UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "PostToolUseFailure" | "Stop", _) => {
+                    s.cache.last_ms = Some(now_ms());
+                }
+                _ => {}
+            }
+        }
 
         let mut out = vec![StoreEvent::Updated(id.clone())];
         match msg.event.as_str() {
@@ -272,6 +290,7 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::CacheClock;
     use crate::protocol::{AGENT_CLAUDE_CODE, PROTOCOL_VERSION};
     use serde_json::json;
 
@@ -373,5 +392,60 @@ mod tests {
                 arg: Some("Task".into())
             }
         );
+    }
+
+    #[test]
+    fn caché_se_renueva_con_eventos_principales() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("SessionStart", json!({})));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, None);
+        for ev in [
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "PostToolUseFailure",
+            "Stop",
+        ] {
+            st.get_mut("s1").unwrap().cache.last_ms = None;
+            st.apply(&msg(ev, json!({})));
+            assert!(
+                st.get("s1").unwrap().cache.last_ms.is_some(),
+                "{ev} debe renovar la caché"
+            );
+        }
+    }
+
+    #[test]
+    fn eventos_de_subagente_no_tocan_la_caché() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({ "agent_id": "a1" })));
+        st.apply(&msg("Stop", json!({ "agent_id": "a1" })));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, None);
+    }
+
+    #[test]
+    fn session_start_clear_vacia_el_reloj() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        st.apply(&msg("SessionStart", json!({ "source": "clear" })));
+        assert_eq!(st.get("s1").unwrap().cache, CacheClock::default());
+    }
+
+    #[test]
+    fn session_start_resume_conserva_el_reloj() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        let antes = st.get("s1").unwrap().cache.last_ms;
+        st.apply(&msg("SessionStart", json!({ "source": "resume" })));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, antes);
+    }
+
+    #[test]
+    fn stop_failure_no_toca_la_caché() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("UserPromptSubmit", json!({})));
+        let antes = st.get("s1").unwrap().cache.last_ms;
+        st.apply(&msg("StopFailure", json!({})));
+        assert_eq!(st.get("s1").unwrap().cache.last_ms, antes);
     }
 }

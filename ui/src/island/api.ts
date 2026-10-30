@@ -13,6 +13,18 @@ export interface LastAction {
   arg: string | null;
 }
 
+/** Temperatura de la caché del prompt; `compactada` la pone una tarea posterior. */
+export type CacheTemp = "caliente" | "enfriandose" | "fria" | "compactada";
+
+export interface CacheView {
+  temp: CacheTemp;
+  /** Instante (ms desde UNIX_EPOCH) en que la caché expira. */
+  expires_ms: number | null;
+  ttl_s: number;
+  /** `false` = TTL estimado (5 min de respaldo). */
+  ttl_detected: boolean;
+}
+
 export interface Session {
   session_id: string;
   project: string;
@@ -21,6 +33,8 @@ export interface Session {
   last_action: LastAction | null;
   pending: number;
   updated_ms: number;
+  /** `null` cuando la sesión aún no tiene temperatura. */
+  cache: CacheView | null;
 }
 
 export interface PendingView {
@@ -37,6 +51,7 @@ export interface Snapshot {
   sessions: Session[];
   mascot: MascotState;
   pending: PendingView[];
+  cache_mascot: CacheTemp | null;
 }
 
 export const getSnapshot = () => invoke<Snapshot>("get_snapshot");

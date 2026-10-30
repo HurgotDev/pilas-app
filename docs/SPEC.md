@@ -422,7 +422,7 @@ caché principal).
 | Evento | Efecto |
 | --- | --- |
 | `UserPromptSubmit` | Última petición = ahora; quita `compactada` |
-| `PreToolUse`, `PostToolUse` | Última petición = ahora |
+| `PreToolUse`, `PostToolUse(Failure)` | Última petición = ahora |
 | `Stop` | Última petición = ahora; lee el transcript a los 1,5 s |
 | `StopFailure` | Nada (la petición falló) |
 | `PreCompact` `auto` en espera | Marca `compactada` (inactividad) |
