@@ -5,6 +5,7 @@
  *   <pilas-mascot state="cargando" style="height: 28px"></pilas-mascot>
  *   el.state = "alerta";            // dormida | cargando | alerta | llena
  *   el.skin = "classic";            // cualquier id del registro de skins (ui/src/skins)
+ *   el.setAttribute("cache", "fria"); // caliente | enfriandose | fria; solo se ve en "dormida"
  *   el.react("saludo");             // saludo | aplastada | mareo
  *   el.addEventListener("pilita-click", (e) => abrirTarjeta(e.detail.reaction));
  *       // detail.reaction: "mareo" | "aplastada" | null (null = ya estaba mareada)
@@ -18,6 +19,7 @@ import { SKINS, type Skin } from "../skins/index.ts";
 
 export type PilitaState = "dormida" | "cargando" | "alerta" | "llena";
 export type PilitaReaction = "saludo" | "aplastada" | "mareo";
+export type PilitaCache = "caliente" | "enfriandose" | "fria";
 
 type Eyes = "abiertos" | "cerrados" | "felices" | "susto" | "apretados" | "enojados" | "espiral";
 type Mouth = "gato" | "neutra" | "o" | "abierta" | "ondas" | "puchero";
@@ -40,6 +42,7 @@ const STATE_POSE: Record<PilitaState, Pose> = {
 
 const REACTION_MS: Record<PilitaReaction, number> = { saludo: 1100, aplastada: 900, mareo: 2000 };
 const STATES: PilitaState[] = ["dormida", "cargando", "alerta", "llena"];
+const CACHES: PilitaCache[] = ["caliente", "enfriandose", "fria"];
 
 const INK = "#1B1B2E";
 
@@ -79,7 +82,10 @@ const TEMPLATE = /* html */ `
   svg[data-zzz]              .x-zzz,
   svg[data-exclamacion]      .x-exclamacion,
   svg[data-destellos]        .x-destellos,
-  svg[data-brazo]            .x-brazo { display: inline; }
+  svg[data-brazo]            .x-brazo,
+  svg[data-cache="caliente"] .k-vapor,
+  svg[data-cache="enfriandose"] .k-copo,
+  svg[data-cache="fria"]     .k-copo { display: inline; }
 
   /* LEDs */
   .lit { fill: var(--led); opacity: 0; transition: opacity .3s ease; }
@@ -134,6 +140,14 @@ const TEMPLATE = /* html */ `
   @keyframes twinkle { 0%,100%{transform:scale(.4); opacity:.3} 50%{transform:scale(1); opacity:1} }
 
   .x-exclamacion { animation: exbob .45s ease-in-out infinite; }
+
+  /* Caché (solo en dormida): vapor que sube, tiritona en ráfagas y copo; sin tocar los colores del cuerpo */
+  .k-vapor path { opacity: .45; transform-box: view-box; animation: steam 2.4s ease-out infinite; }
+  .k-vapor path + path { animation-delay: 1.2s; }
+  @keyframes steam { 0%{opacity:0; transform:translateY(4px)} 30%{opacity:.6} 100%{opacity:0; transform:translateY(-6px)} }
+  svg[data-cache="enfriandose"] .shiver { animation: shiver 2s linear infinite; }
+  @keyframes shiver { 0%,80%,94%,100%{transform:translateX(0)} 82%,86%,90%{transform:translateX(-2px)}
+                      84%,88%,92%{transform:translateX(2px)} }
   @keyframes exbob { 50% { transform: translateY(-3px); } }
 
   @media (prefers-reduced-motion: reduce) {
@@ -144,7 +158,7 @@ const TEMPLATE = /* html */ `
 </style>
 
 <svg viewBox="0 0 144 156" role="img" aria-label="Pilita">
-  <g class="rig">
+  <g class="rig"><g class="shiver">
     <ellipse class="c-foot" cx="52" cy="144" rx="11" ry="7"/>
     <ellipse class="c-foot" cx="88" cy="144" rx="11" ry="7"/>
 
@@ -233,7 +247,17 @@ const TEMPLATE = /* html */ `
 
     <!-- ranura del accesorio de la skin sobre el borne: dentro del rig, así se mueve con ella -->
     <g class="accessory"></g>
-  </g>
+
+    <!-- caché, a la izquierda del borne: libre de los sombreros de las skins (x >= 34) y de la "z" (x >= 114) -->
+    <g class="v k-vapor" fill="none" stroke="#E4E6EF" stroke-width="3" stroke-linecap="round">
+      <path d="M22 28 q-5 -6 0 -12 q5 -6 0 -12"/>
+      <path d="M32 26 q-4 -5 0 -10 q4 -5 0 -10"/>
+    </g>
+    <g class="v k-copo" stroke="#8FD3FF" stroke-width="3" stroke-linecap="round">
+      <path d="M24 8 v20 M15.3 13 l17.4 10 M15.3 23 l17.4 -10"/>
+      <path d="M21 9.5 l3 3 l3 -3 M21 26.5 l3 -3 l3 3" fill="none" stroke-width="2.2"/>
+    </g>
+  </g></g>
 
   <!-- extras fuera del cuerpo -->
   <g class="v x-zzz" fill="none" stroke="#C7D0FF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -254,7 +278,7 @@ const TEMPLATE = /* html */ `
 `;
 
 export class PilitaMascot extends HTMLElement {
-  static observedAttributes = ["state", "skin"];
+  static observedAttributes = ["state", "skin", "cache"];
 
   private svg!: SVGSVGElement;
   private accessory!: SVGGElement;
@@ -360,6 +384,9 @@ export class PilitaMascot extends HTMLElement {
       if (p.extras.includes(x)) d[x] = ""; else delete d[x];
     }
     if (this.reaction) d.react = this.reaction; else delete d.react;
+    // En Cargando la sesión trabaja; Alerta y Llena mandan: la caché solo se ve dormida.
+    const cache = this.getAttribute("cache") as PilitaCache;
+    if (this.state === "dormida" && CACHES.includes(cache)) d.cache = cache; else delete d.cache;
     this.svg.setAttribute("aria-label", `Pilita: ${this.state}`);
     this.dress();
   }

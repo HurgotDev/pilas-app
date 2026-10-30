@@ -156,6 +156,8 @@ metálico y franja de 4 LEDs. El color de la carcasa cuenta el estado; los LEDs,
 
 Prioridad: Alerta > Llena > Cargando > Dormida. Reacciones: hover → saludo (1,1 s), clic → aplastada (0,9 s),
 3 clics en < 1 s → mareo (2 s). Conservan el color del estado; nunca en Alerta.
+Gesto de caché (vapor, tiritar, copo): solo en Dormida; ver "Temperatura de
+caché" → "Interfaz".
 
 ## Sonidos
 
@@ -472,8 +474,9 @@ release lo ignora.
 - **Pilita**: atributo observado `cache="caliente|enfriandose|fria"`. Solo
   se ve en estado Dormida (en Cargando la sesión trabaja; Alerta y Llena
   mandan). Nunca cambia el color del cuerpo; vale para todas las skins.
-  - Caliente: dos hilitos de vapor sobre el borne (2,4 s, sutil).
-  - Enfriándose: tirita (ráfagas cortas cada 2 s) y un copo junto al borne.
+  - Caliente: dos hilitos de vapor arriba a la izquierda del borne (2,4 s,
+    sutil), donde no chocan con los sombreros de las skins ni con la "z".
+  - Enfriándose: tirita (ráfagas cortas cada 2 s) y un copo en el mismo sitio.
   - Fría: copo quieto, sin movimiento.
   - Con `prefers-reduced-motion`: solo los iconos, sin animación.
 - **Píldora**: con `enfriandose` y sin pendientes, a la derecha una cuenta

@@ -136,10 +136,12 @@ export function mountIsland(root: HTMLElement): void {
     <div class="pill">
       <pilas-mascot state="dormida"></pilas-mascot>
       <span class="badge" hidden></span>
+      <button class="cooldown" hidden></button>
     </div>
     <div class="panel"></div>`;
   const mascot = root.querySelector("pilas-mascot") as PilitaMascot;
   const badge = root.querySelector(".badge") as HTMLElement;
+  const cooldown = root.querySelector(".cooldown") as HTMLButtonElement;
   const panel = root.querySelector(".panel") as HTMLElement;
 
   const size = (): Size => (open ? "open" : snap.sessions.length === 0 && !peek ? "hidden" : "pill");
@@ -313,7 +315,22 @@ export function mountIsland(root: HTMLElement): void {
     if (cooling && !coolTimer) coolTimer = window.setInterval(tickCooling, 1000);
     else if (!cooling && coolTimer) { clearInterval(coolTimer); coolTimer = 0; }
   }
+  // Cuenta atrás de la píldora: la sesión que se enfría y expira antes, solo sin pendientes (el contador manda).
+  function renderCooldown(): void {
+    const next = snap.cache_mascot === "enfriandose" && snap.pending.length === 0
+      ? snap.sessions
+          .filter((s) => s.cache?.temp === "enfriandose")
+          .sort((a, b) => (a.cache!.expires_ms ?? 0) - (b.cache!.expires_ms ?? 0))[0]
+      : undefined;
+    cooldown.hidden = !next;
+    if (!next) return;
+    const time = clockOf((next.cache!.expires_ms ?? 0) - Date.now());
+    cooldown.textContent = time;
+    cooldown.dataset.session = next.session_id;
+    cooldown.setAttribute("aria-label", t("cache.pill", { time }));
+  }
   function tickCooling(): void {
+    renderCooldown();
     for (const el of panel.querySelectorAll<HTMLElement>("[data-expires]")) {
       el.textContent = t("cache.cooling", { time: clockOf(Number(el.dataset.expires) - Date.now()) });
     }
@@ -321,6 +338,9 @@ export function mountIsland(root: HTMLElement): void {
 
   function render(): void {
     mascot.state = mascotState();
+    const cache = snap.cache_mascot;
+    if (cache && cache !== "compactada") mascot.setAttribute("cache", cache); else mascot.removeAttribute("cache");
+    renderCooldown();
     badge.hidden = snap.pending.length === 0;
     badge.textContent = String(snap.pending.length);
     if (open) {
@@ -382,6 +402,11 @@ export function mountIsland(root: HTMLElement): void {
     if ((e.target as Element).closest("pilas-mascot")) return;
     open = !open;
     render();
+  });
+  // Salta a la terminal sin abrir la isla: el clic no llega a la píldora.
+  cooldown.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (cooldown.dataset.session) void api.jumpToSession(cooldown.dataset.session);
   });
   mascot.addEventListener("pilita-click", (e) => {
     // En alerta no hay reacciones ni sonido; el 3er clic (mareo) suena distinto al toque.

@@ -28,6 +28,11 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
          display: grid; place-items: center; padding: 0 6px; }
 /* display: grid pisa el atributo hidden: sin pendientes el contador no se ve. */
 .badge[hidden] { display: none; }
+/* Cuenta atrás de la caché: ocupa el hueco del contador (48 px de margen junto al notch, menos el padding). */
+.cooldown { max-width: 36px; height: 20px; padding: 0 2px; border: 0; border-radius: 6px; background: none; color: var(--cold);
+            font: inherit; font-size: 11px; font-weight: 700; line-height: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
+.cooldown:hover, .cooldown:focus-visible { background: #15324a; outline: none; }
+.cooldown[hidden] { display: none; }
 
 .panel { position: relative; box-sizing: border-box; min-width: 420px; padding: 4px 16px 16px;
          transition: opacity .15s ease, visibility 0s .3s; opacity: 0; visibility: hidden; }
