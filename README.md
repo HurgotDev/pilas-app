@@ -30,6 +30,14 @@ Spanish).
   prompt in the terminal, without opening the island or playing a sound.
 - Click a session to jump to its exact Ghostty tab; with other terminals, it
   brings the app to the front.
+- Prompt cache temperature: each session shows whether Claude Code's prompt
+  cache for its main conversation is warm, cooling or cold (or compacted
+  while idle), so you can decide whether to keep going or `/compact`. Pilas
+  detects each session's cache lifetime (1 hour or 5 minutes) from its
+  transcript. When a cache starts cooling, the pilita shivers, an optional
+  sound plays and the pill shows a countdown; click it to jump to that
+  session's terminal. Configure it under **Prompt cache** in Settings
+  (**Cache temperature**, **Warn before it cools**, **Sound when cooling**).
 - Optional 8-bit sounds; interface in English and Spanish.
 - Seasonal costumes: from October 15 to November 2 the pilita dresses up
   for Halloween, with its own sounds, a bat flying across the island and
@@ -41,6 +49,8 @@ Spanish).
 
 Privacy: no accounts and no telemetry. The only internet connection is the
 update check, which can be turned off.
+For the cache temperature, Pilas reads only the usage numbers at the end of
+each session's local transcript; it never stores or logs its content.
 
 ## Installation
 
@@ -78,6 +88,10 @@ are two ways to allow it:
 On first launch, the onboarding opens, installs the hooks in Claude Code and
 lets you choose whether Pilas launches at login.
 After that, the pilita icon in the menu bar gives you access to **Settings…**.
+
+If you installed the hooks with a version before the cache temperature,
+Settings shows them as **Needs repair**: click **Repair** to add the new
+`PreCompact` hook. Your other hooks and your status line are left untouched.
 
 Pilas checks for updates at startup and every 24 hours, and tells you in the
 menu bar and in Settings. It does not install anything unless you ask it to.
