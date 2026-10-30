@@ -52,6 +52,9 @@ pub struct Session {
     /// Reloj de la caché del prompt; la vista (`cache::temperature`) la construye la app.
     #[serde(skip)]
     pub cache: CacheClock,
+    /// Ruta del transcript JSONL; solo se usa para leer la caché, nunca se muestra.
+    #[serde(skip)]
+    pub transcript_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +220,7 @@ impl SessionStore {
             last_assistant_message: None,
             updated_ms: 0,
             cache: CacheClock::default(),
+            transcript_path: None,
         });
         if !cwd.is_empty() && s.cwd != cwd {
             s.project = project_of(&cwd);
@@ -230,6 +234,9 @@ impl SessionStore {
         }
         if msg.term_program.is_some() {
             s.term_program = msg.term_program.clone();
+        }
+        if let Some(p) = msg.payload.get("transcript_path").and_then(Value::as_str) {
+            s.transcript_path = Some(p.to_string());
         }
         s.updated_ms = now_ms();
 
@@ -438,6 +445,14 @@ mod tests {
         let antes = st.get("s1").unwrap().cache.last_ms;
         st.apply(&msg("SessionStart", json!({ "source": "resume" })));
         assert_eq!(st.get("s1").unwrap().cache.last_ms, antes);
+    }
+
+    #[test]
+    fn guarda_la_ruta_del_transcript() {
+        let mut st = SessionStore::default();
+        st.apply(&msg("SessionStart", json!({ "transcript_path": "/t/s1.jsonl" })));
+        st.apply(&msg("Stop", json!({})));
+        assert_eq!(st.get("s1").unwrap().transcript_path.as_deref(), Some("/t/s1.jsonl"));
     }
 
     #[test]

@@ -1,9 +1,9 @@
 //! Servidor del socket local: una conexión por invocación de `pilas-hook`, NDJSON.
 
-use crate::{emit_snapshot, AppState, Outcome, PendingRequest};
-use pilas_core::decision;
+use crate::{emit_snapshot, spawn_transcript_read, AppState, Outcome, PendingRequest};
 use pilas_core::protocol::{AppReply, HookMessage, PROTOCOL_VERSION};
 use pilas_core::session::StoreEvent;
+use pilas_core::{cache, decision};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::mpsc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -62,7 +62,14 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
     let state = app.state::<AppState>();
     let rx = {
         let mut inner = state.0.lock().unwrap();
+        let sid = pilas_core::protocol::session_id(&msg.payload).unwrap_or_default();
+        let known_before = inner.store.get(sid).is_some();
         let events = inner.store.apply(&msg);
+        if let Some(delay) = cache::transcript_read_delay_ms(&msg.event, &msg.payload, known_before) {
+            if let Some(path) = inner.store.get(sid).and_then(|s| s.transcript_path.clone()) {
+                spawn_transcript_read(app.clone(), sid.to_string(), path, delay);
+            }
+        }
         for ev in &events {
             if let StoreEvent::Finished(id) = ev {
                 let _ = app.emit("pilas://finished", id.clone());

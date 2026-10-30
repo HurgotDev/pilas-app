@@ -132,7 +132,7 @@ Tareas verticales; detalle y criterios en `tasks/plan.md`. En serie salvo T4,
 que es solo UI.
 
 - [x] T1 · Estados de punta a punta con TTL estimado y chip en la lista.
-- [ ] T2 · TTL real desde el transcript.
+- [x] T2 · TTL real desde el transcript.
 - [ ] T3 · Ajustes y aviso con sonido `frio`.
 - [ ] T4 · Pilita con atributo `cache` y cuenta atrás en la píldora.
 - [ ] T5 · Compactación: hook `PreCompact`, idle y `SessionStart`.

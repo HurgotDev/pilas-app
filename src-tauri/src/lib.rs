@@ -311,6 +311,38 @@ fn spawn_cache_watch(app: AppHandle) {
     });
 }
 
+/// Lee la cola del transcript tras `delay_ms` y la aplica al reloj de la sesión.
+/// Un fallo de IO no cambia nada; el contenido nunca se guarda ni se registra.
+pub(crate) fn spawn_transcript_read(app: AppHandle, session_id: String, path: String, delay_ms: u64) {
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        let Some(text) = read_tail(&path, 512 * 1024) else {
+            return;
+        };
+        let parsed = cache::parse_transcript_tail(&text);
+        {
+            let state = app.state::<AppState>();
+            let mut inner = state.0.lock().unwrap();
+            let Some(s) = inner.store.get_mut(&session_id) else {
+                return;
+            };
+            cache::apply_transcript(&mut s.cache, &parsed);
+        }
+        emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+    });
+}
+
+/// Últimos `max` bytes de un archivo como texto (UTF-8 con pérdida).
+fn read_tail(path: &str, max: u64) -> Option<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = std::fs::File::open(path).ok()?;
+    let len = f.metadata().ok()?.len();
+    f.seek(SeekFrom::Start(len.saturating_sub(max))).ok()?;
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
 /// `PILAS_CACHE_TTL_SECS` fuerza el TTL de todas las sesiones; solo en depuración.
 fn cache_ttl_override() -> Option<u64> {
     if !cfg!(debug_assertions) {
