@@ -1,9 +1,11 @@
+mod error;
 mod hooks;
 mod panel;
 mod server;
 mod settings;
 mod updates;
 
+use crate::error::CommandError;
 use pilas_core::decision::{self, Answers, PermissionChoice};
 use pilas_core::protocol::AppReply;
 use pilas_core::session::{MascotState, Session, SessionStore, StoreEvent};
@@ -110,10 +112,10 @@ fn deliver(
     state: &AppState,
     request_id: &str,
     build: impl FnOnce(&PendingRequest) -> Option<Value>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     {
         let mut inner = state.0.lock().unwrap();
-        let req = inner.pending.remove(request_id).ok_or("the request no longer exists")?;
+        let req = inner.pending.remove(request_id).ok_or(CommandError::RequestGone)?;
         inner.queue.retain(|r| r != request_id);
         let stdout = build(&req);
         let _ = req.tx.send(Outcome::Reply(AppReply::new(request_id, stdout)));
@@ -134,7 +136,7 @@ fn resolve_permission(
     state: State<'_, AppState>,
     request_id: String,
     choice: PermissionChoice,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     deliver(&app, &state, &request_id, |req| {
         decision::permission_output(&choice, &req.payload)
     })
@@ -147,7 +149,7 @@ fn answer_question(
     state: State<'_, AppState>,
     request_id: String,
     answers: Option<Answers>,
-) -> Result<(), String> {
+) -> Result<(), CommandError> {
     deliver(&app, &state, &request_id, |req| match &answers {
         Some(a) => decision::question_output(&req.payload, a),
         None => Some(decision::question_to_terminal()),
@@ -175,10 +177,10 @@ fn apply_layout(app: &AppHandle) {
 }
 
 #[tauri::command]
-fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(), CommandError> {
     let target = {
         let inner = state.0.lock().unwrap();
-        let s = inner.store.get(&session_id).ok_or("unknown session")?;
+        let s = inner.store.get(&session_id).ok_or(CommandError::SessionUnknown)?;
         pilas_jump::JumpTarget {
             term_program: s.term_program.clone(),
             tty: s.tty.clone(),
@@ -188,9 +190,7 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
         }
     };
     let had_cache = target.cached_terminal_id.is_some();
-    let outcome = pilas_jump::jumper_for(target.term_program.as_deref())
-        .jump(&target)
-        .map_err(|e| e.to_string())?;
+    let outcome = pilas_jump::jumper_for(target.term_program.as_deref()).jump(&target)?;
     let mut inner = state.0.lock().unwrap();
     match outcome {
         pilas_jump::JumpOutcome::Exact { terminal_id: Some(id) } => {
@@ -253,7 +253,7 @@ fn get_settings() -> settings::Settings {
 }
 
 #[tauri::command]
-fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::Settings) -> Result<(), String> {
+fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::Settings) -> Result<(), CommandError> {
     settings::save(&settings)?;
     state.0.lock().unwrap().screen = settings.screen.clone();
     apply_layout(&app);
@@ -274,20 +274,20 @@ fn hooks_status() -> hooks::HooksInfo {
 }
 
 #[tauri::command]
-fn preview_hooks(action: String) -> Result<Vec<pilas_core::installer::DiffLine>, String> {
+fn preview_hooks(action: String) -> Result<Vec<pilas_core::installer::DiffLine>, CommandError> {
     hooks::preview(hooks::Action::parse(&action)?)
 }
 
 /// Returns the backup path if `settings.json` already existed and was written.
 #[tauri::command]
-fn apply_hooks(action: String) -> Result<Option<String>, String> {
+fn apply_hooks(action: String) -> Result<Option<String>, CommandError> {
     let backup = hooks::apply(hooks::Action::parse(&action)?)?;
     Ok(backup.map(|p| p.display().to_string()))
 }
 
 #[tauri::command]
-fn open_settings(app: AppHandle) -> Result<(), String> {
-    open_settings_window(&app).map_err(|e| e.to_string())
+fn open_settings(app: AppHandle) -> Result<(), CommandError> {
+    Ok(open_settings_window(&app)?)
 }
 
 fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {

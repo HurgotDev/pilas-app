@@ -89,6 +89,23 @@ const en = {
   "onb.restart.title": "Restart open sessions",
   "onb.restart.body": "Claude Code sessions that were already open need a restart to pick up the hooks. New sessions work right away.",
   "onb.done": "Done",
+  "err.invalid_action": "Pilas received an unknown action.",
+  "err.path_unavailable": "Pilas could not find a folder it needs.",
+  "err.hook_missing": "Pilas could not find its hook program. Reinstall Pilas.",
+  "err.settings_not_json": "Claude Code's settings file is not valid JSON, so nothing was changed.",
+  "err.settings_not_object": "Claude Code's settings file must contain a JSON object, so nothing was changed.",
+  "err.settings_hooks_not_object": "The \"hooks\" entry in Claude Code's settings must be an object, so nothing was changed.",
+  "err.settings_event_not_array": "A hook event in Claude Code's settings must be a list, so nothing was changed.",
+  "err.jump_failed": "Pilas could not focus that terminal.",
+  "err.file_failed": "Pilas could not read or write a file. Check its permissions.",
+  "err.window_failed": "Pilas could not open its window.",
+  "err.update_check_failed": "Pilas could not check for updates. Try again later.",
+  "err.update_install_failed": "The update could not be installed.",
+  "err.update_unavailable": "No update is available.",
+  "err.update_not_in_app": "Updates can only be installed from Pilas.app, not in development.",
+  "err.request_gone": "That request is no longer waiting. It may have been answered in the terminal.",
+  "err.session_unknown": "That session has ended.",
+  "err.unknown": "Something went wrong. Try again.",
 };
 
 const es: Record<keyof typeof en, string> = {
@@ -180,6 +197,23 @@ const es: Record<keyof typeof en, string> = {
   "onb.restart.title": "Reinicia las sesiones abiertas",
   "onb.restart.body": "Las sesiones de Claude Code que ya estaban abiertas necesitan reiniciarse para usar los hooks. Las nuevas funcionan al momento.",
   "onb.done": "Listo",
+  "err.invalid_action": "Pilas recibió una acción desconocida.",
+  "err.path_unavailable": "Pilas no encontró una carpeta que necesita.",
+  "err.hook_missing": "Pilas no encontró su programa de hooks. Reinstala Pilas.",
+  "err.settings_not_json": "El archivo de ajustes de Claude Code no es JSON válido, así que no se cambió nada.",
+  "err.settings_not_object": "El archivo de ajustes de Claude Code debe contener un objeto JSON, así que no se cambió nada.",
+  "err.settings_hooks_not_object": "La entrada \"hooks\" de los ajustes de Claude Code debe ser un objeto, así que no se cambió nada.",
+  "err.settings_event_not_array": "Un evento de hook en los ajustes de Claude Code debe ser una lista, así que no se cambió nada.",
+  "err.jump_failed": "Pilas no pudo enfocar esa terminal.",
+  "err.file_failed": "Pilas no pudo leer o escribir un archivo. Revisa sus permisos.",
+  "err.window_failed": "Pilas no pudo abrir su ventana.",
+  "err.update_check_failed": "Pilas no pudo buscar actualizaciones. Inténtalo más tarde.",
+  "err.update_install_failed": "No se pudo instalar la actualización.",
+  "err.update_unavailable": "No hay ninguna actualización disponible.",
+  "err.update_not_in_app": "Las actualizaciones solo se pueden instalar desde Pilas.app, no en desarrollo.",
+  "err.request_gone": "Esa solicitud ya no está esperando. Es posible que se haya respondido en la terminal.",
+  "err.session_unknown": "Esa sesión ya terminó.",
+  "err.unknown": "Algo salió mal. Inténtalo de nuevo.",
 };
 
 export type Key = keyof typeof en;
@@ -200,4 +234,12 @@ export function setLang(l: Lang | null): void {
 /** Replaces `{name}` with `vars.name`. */
 export function t(key: Key, vars: Record<string, string | number> = {}): string {
   return dict[lang][key].replace(/\{(\w+)\}/g, (m, k: string) => String(vars[k] ?? m));
+}
+
+/** Backend errors arrive as a code (`CommandError` in src-tauri/src/error.rs). */
+export function errorText(e: unknown): string {
+  const key = `err.${typeof e === "string" ? e : ""}`;
+  if (key in en) return t(key as Key);
+  console.error("Unmapped backend error:", e);
+  return t("err.unknown");
 }

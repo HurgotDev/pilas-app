@@ -84,7 +84,7 @@ export const getSettings = () => invoke<Settings>("get_settings");
 export const setSettings = (settings: Settings) => invoke<void>("set_settings", { settings });
 export const listScreens = () => invoke<string[]>("list_screens");
 export const hooksStatus = () => invoke<HooksInfo>("hooks_status");
-/** Rejects with an error text (e.g. invalid JSON). */
+/** Rejects with an error code (e.g. `settings_not_json`), shown through `errorText`. */
 export const previewHooks = (action: HookAction) => invoke<DiffLine[]>("preview_hooks", { action });
 /** Backup path, or `null` if there was nothing to back up. */
 export const applyHooks = (action: HookAction) => invoke<string | null>("apply_hooks", { action });
@@ -96,7 +96,7 @@ export interface UpdateInfo {
   notes: string | null;
 }
 export const getUpdateStatus = () => invoke<UpdateInfo | null>("update_status");
-/** Rejects with an error text (e.g. no network). */
+/** Rejects with an error code (e.g. `update_check_failed`), shown through `errorText`. */
 export const checkUpdatesNow = () => invoke<UpdateInfo | null>("check_updates_now");
 /** Downloads, installs and restarts Pilas. Only on an explicit button press. */
 export const installUpdate = () => invoke<void>("install_update");

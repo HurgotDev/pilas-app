@@ -1,6 +1,7 @@
 //! Installer IO: reads `~/.claude/settings.json`, copies `pilas-hook` to the data folder,
 //! backs up and writes. The JSON merge lives in `pilas_core::installer`.
 
+use crate::error::CommandError;
 use pilas_core::installer::{self, DiffLine, HookStatus};
 use pilas_core::paths::data_dir;
 use serde::Serialize;
@@ -17,11 +18,11 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn parse(action: &str) -> Result<Self, String> {
+    pub fn parse(action: &str) -> Result<Self, CommandError> {
         match action {
             "install" => Ok(Self::Install),
             "uninstall" => Ok(Self::Uninstall),
-            other => Err(format!("unknown action: {other}")),
+            other => Err(CommandError::InvalidAction(other.to_string())),
         }
     }
 }
@@ -40,16 +41,16 @@ struct Paths {
 }
 
 /// `$PILAS_CLAUDE_SETTINGS` allows testing without touching the real config (see docs/HOOKS-DEV.md).
-fn paths() -> Result<Paths, String> {
+fn paths() -> Result<Paths, CommandError> {
     let claude_settings = match std::env::var_os("PILAS_CLAUDE_SETTINGS") {
         Some(p) => PathBuf::from(p),
         None => {
-            let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
+            let home = std::env::var_os("HOME").ok_or(CommandError::PathUnavailable)?;
             PathBuf::from(home).join(".claude/settings.json")
         }
     };
     let hook_dest = data_dir()
-        .ok_or("could not resolve the data folder")?
+        .ok_or(CommandError::PathUnavailable)?
         .join("bin")
         .join(HOOK_NAME);
     Ok(Paths {
@@ -59,23 +60,21 @@ fn paths() -> Result<Paths, String> {
 }
 
 /// No file means `{}`. A file that is not valid JSON is an error, so nothing gets written.
-fn read_claude_settings(path: &Path) -> Result<Value, String> {
+fn read_claude_settings(path: &Path) -> Result<Value, CommandError> {
     match fs::read_to_string(path) {
         Ok(text) if text.trim().is_empty() => Ok(json!({})),
-        Ok(text) => serde_json::from_str(&text)
-            .map_err(|_| format!("{} is not valid JSON; nothing was written", path.display())),
+        Ok(text) => Ok(serde_json::from_str(&text)?),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(e.into()),
     }
 }
 
-fn compute(action: Action, current: &Value, hook_dest: &Path) -> Result<Value, String> {
-    let dest = hook_dest.to_str().ok_or("the hook path is not UTF-8")?;
-    match action {
-        Action::Install => installer::install(current, dest),
-        Action::Uninstall => installer::uninstall(current, dest),
-    }
-    .map_err(|e| e.to_string())
+fn compute(action: Action, current: &Value, hook_dest: &Path) -> Result<Value, CommandError> {
+    let dest = hook_dest.to_str().ok_or(CommandError::PathUnavailable)?;
+    Ok(match action {
+        Action::Install => installer::install(current, dest)?,
+        Action::Uninstall => installer::uninstall(current, dest)?,
+    })
 }
 
 /// If the path cannot be resolved, "missing" with an empty path.
@@ -101,17 +100,17 @@ pub fn info() -> HooksInfo {
 }
 
 /// Pretty JSON before/after diff of what the action would do. Writes nothing.
-pub fn preview(action: Action) -> Result<Vec<DiffLine>, String> {
+pub fn preview(action: Action) -> Result<Vec<DiffLine>, CommandError> {
     let p = paths()?;
     let before = read_claude_settings(&p.claude_settings)?;
     let after = compute(action, &before, &p.hook_dest)?;
-    let before = serde_json::to_string_pretty(&before).map_err(|e| e.to_string())?;
-    let after = serde_json::to_string_pretty(&after).map_err(|e| e.to_string())?;
+    let before = serde_json::to_string_pretty(&before)?;
+    let after = serde_json::to_string_pretty(&after)?;
     Ok(installer::line_diff(&before, &after))
 }
 
 /// Returns the backup path if `settings.json` already existed and was written.
-pub fn apply(action: Action) -> Result<Option<PathBuf>, String> {
+pub fn apply(action: Action) -> Result<Option<PathBuf>, CommandError> {
     let p = paths()?;
     let current = read_claude_settings(&p.claude_settings)?;
     let next = compute(action, &current, &p.hook_dest)?;
@@ -130,9 +129,9 @@ pub fn apply(action: Action) -> Result<Option<PathBuf>, String> {
 }
 
 /// Next to the app executable; may not exist.
-fn bundled_hook() -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    Ok(exe.parent().ok_or("the executable has no folder")?.join(HOOK_NAME))
+fn bundled_hook() -> Result<PathBuf, CommandError> {
+    let exe = std::env::current_exe()?;
+    Ok(exe.parent().ok_or(CommandError::PathUnavailable)?.join(HOOK_NAME))
 }
 
 /// Recopy only if Pilas is connected, a bundled hook exists and it differs from
@@ -157,22 +156,19 @@ pub fn refresh_hook() {
 }
 
 /// Temp write + rename.
-fn copy_hook(dest: &Path) -> Result<(), String> {
+fn copy_hook(dest: &Path) -> Result<(), CommandError> {
     use std::os::unix::fs::PermissionsExt;
     // shortcut: in development this copies target/debug/pilas-hook; in release the publish workflow bundles it (bundle.macOS.files → MacOS/pilas-hook, universal and ad-hoc signed)
     let src = bundled_hook()?;
     if !src.exists() {
-        return Err(format!(
-            "{} not found next to the app; build it with `cargo build -p pilas-hook`",
-            src.display()
-        ));
+        return Err(CommandError::HookMissing);
     }
-    let dir = dest.parent().ok_or("hook path has no folder")?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let dir = dest.parent().ok_or(CommandError::PathUnavailable)?;
+    fs::create_dir_all(dir)?;
     let tmp = dir.join(format!(".{HOOK_NAME}.tmp"));
-    fs::copy(&src, &tmp).map_err(|e| e.to_string())?;
-    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, dest).map_err(|e| e.to_string())
+    fs::copy(&src, &tmp)?;
+    fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755))?;
+    Ok(fs::rename(&tmp, dest)?)
 }
 
 /// Local `YYYYMMDD-HHMMSS` for backup names.
@@ -196,29 +192,29 @@ fn timestamp() -> String {
 }
 
 /// Backup (if it existed) + atomic write keeping the original's permissions.
-fn write_claude_settings(path: &Path, value: &Value) -> Result<Option<PathBuf>, String> {
+fn write_claude_settings(path: &Path, value: &Value) -> Result<Option<PathBuf>, CommandError> {
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or("invalid settings.json name")?;
-    let dir = path.parent().ok_or("settings.json has no folder")?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        .ok_or(CommandError::PathUnavailable)?;
+    let dir = path.parent().ok_or(CommandError::PathUnavailable)?;
+    fs::create_dir_all(dir)?;
 
     let backup = if path.exists() {
         let b = dir.join(format!("{name}.pilas-backup-{}", timestamp()));
-        fs::copy(path, &b).map_err(|e| e.to_string())?;
+        fs::copy(path, &b)?;
         Some(b)
     } else {
         None
     };
 
-    let text = serde_json::to_string_pretty(value).map_err(|e| e.to_string())? + "\n";
+    let text = serde_json::to_string_pretty(value)? + "\n";
     let tmp = dir.join(format!("{name}.pilas-tmp"));
-    fs::write(&tmp, text).map_err(|e| e.to_string())?;
+    fs::write(&tmp, text)?;
     if let Ok(meta) = fs::metadata(path) {
-        fs::set_permissions(&tmp, meta.permissions()).map_err(|e| e.to_string())?;
+        fs::set_permissions(&tmp, meta.permissions())?;
     }
-    fs::rename(&tmp, path).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, path)?;
     Ok(backup)
 }
 
@@ -228,9 +224,9 @@ mod tests {
 
     #[test]
     fn unknown_action_is_error() {
-        assert_eq!(Action::parse("install"), Ok(Action::Install));
-        assert_eq!(Action::parse("uninstall"), Ok(Action::Uninstall));
-        assert!(Action::parse("delete").is_err());
+        assert!(matches!(Action::parse("install"), Ok(Action::Install)));
+        assert!(matches!(Action::parse("uninstall"), Ok(Action::Uninstall)));
+        assert_eq!(Action::parse("delete").unwrap_err().code(), "invalid_action");
     }
 
     #[test]
@@ -255,7 +251,7 @@ mod tests {
         fs::write(&broken, "{ no json").unwrap();
         assert!(read_claude_settings(&broken).is_err());
         let missing = dir.join("missing.json");
-        assert_eq!(read_claude_settings(&missing), Ok(json!({})));
+        assert_eq!(read_claude_settings(&missing).unwrap(), json!({}));
         let _ = fs::remove_dir_all(&dir);
     }
 }
