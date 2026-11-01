@@ -2,7 +2,7 @@
 import "./mascot/pilita";
 import * as api from "./island/api";
 import { configure, play } from "./sound/sfx";
-import { lang, setLang, t, type Key, type Lang } from "./i18n";
+import { errorText, lang, setLang, t, type Key, type Lang } from "./i18n";
 import { resolveSkin, SKINS, type SkinChoice } from "./skins/index.ts";
 import { getVersion } from "@tauri-apps/api/app";
 
@@ -81,7 +81,7 @@ async function checkNow(): Promise<void> {
   try {
     update = await api.checkUpdatesNow();
   } catch (e) {
-    updateError = String(e);
+    updateError = errorText(e);
   }
   checking = false;
   render();
@@ -95,7 +95,7 @@ async function install(): Promise<void> {
   try {
     await api.installUpdate();
   } catch (e) {
-    updateError = String(e);
+    updateError = errorText(e);
     installing = false;
     confirmInstall = false;
     render();
@@ -106,7 +106,7 @@ async function install(): Promise<void> {
 function save(): void {
   configure({ enabled: settings.sound_enabled, volume: settings.volume, skin: skinNow() });
   api.setSettings(settings).catch((e: unknown) => {
-    error = String(e);
+    error = errorText(e);
     render();
   });
 }
@@ -121,7 +121,7 @@ async function showDiff(action: api.HookAction): Promise<void> {
     diff = { action, lines: await api.previewHooks(action) };
   } catch (e) {
     diff = null;
-    error = String(e);
+    error = errorText(e);
   }
   busy = false;
   render();
@@ -138,7 +138,7 @@ async function apply(): Promise<void> {
     diff = null;
     hooks = await api.hooksStatus();
   } catch (e) {
-    error = String(e);
+    error = errorText(e);
   }
   busy = false;
   render();
@@ -355,5 +355,5 @@ async function init(): Promise<void> {
 }
 
 init().catch((e: unknown) => {
-  root.textContent = String(e);
+  root.textContent = errorText(e);
 });

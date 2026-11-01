@@ -1,5 +1,6 @@
 //! Pilas settings (`data_dir()/settings.json`) and the launch-at-login LaunchAgent.
 
+use crate::error::CommandError;
 use crate::panel::ScreenChoice;
 use pilas_core::paths::data_dir;
 use serde::{Deserialize, Serialize};
@@ -51,10 +52,10 @@ impl Default for Settings {
     }
 }
 
-fn settings_file() -> Result<PathBuf, String> {
+fn settings_file() -> Result<PathBuf, CommandError> {
     data_dir()
         .map(|d| d.join("settings.json"))
-        .ok_or_else(|| "could not resolve the data folder".to_string())
+        .ok_or(CommandError::PathUnavailable)
 }
 
 /// Missing or invalid settings fall back to the defaults.
@@ -67,19 +68,19 @@ pub fn load() -> Settings {
 }
 
 /// Atomic write (temp file + rename).
-pub fn save(settings: &Settings) -> Result<(), String> {
+pub fn save(settings: &Settings) -> Result<(), CommandError> {
     let path = settings_file()?;
-    let dir = path.parent().ok_or("settings path has no folder")?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let text = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    let dir = path.parent().ok_or(CommandError::PathUnavailable)?;
+    fs::create_dir_all(dir)?;
+    let text = serde_json::to_string_pretty(settings)?;
     let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, text + "\n").map_err(|e| e.to_string())?;
-    fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    fs::write(&tmp, text + "\n")?;
+    Ok(fs::rename(&tmp, &path)?)
 }
 
 #[cfg(target_os = "macos")]
-fn launch_agent_path() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
+fn launch_agent_path() -> Result<PathBuf, CommandError> {
+    let home = std::env::var_os("HOME").ok_or(CommandError::PathUnavailable)?;
     Ok(PathBuf::from(home).join("Library/LaunchAgents/dev.pilas.app.plist"))
 }
 
@@ -105,8 +106,8 @@ pub fn in_app_bundle() -> bool {
 }
 
 #[cfg(target_os = "macos")]
-pub fn sync_launch_agent(enabled: bool) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+pub fn sync_launch_agent(enabled: bool) -> Result<(), CommandError> {
+    let exe = std::env::current_exe()?;
     let exe = exe.to_string_lossy();
     // In development, leave the user's LaunchAgent alone.
     if !in_app_bundle() {
@@ -114,20 +115,20 @@ pub fn sync_launch_agent(enabled: bool) -> Result<(), String> {
     }
     let plist = launch_agent_path()?;
     if enabled {
-        let dir = plist.parent().ok_or("LaunchAgent path has no folder")?;
-        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        fs::write(&plist, plist_xml(&exe)).map_err(|e| e.to_string())
+        let dir = plist.parent().ok_or(CommandError::PathUnavailable)?;
+        fs::create_dir_all(dir)?;
+        Ok(fs::write(&plist, plist_xml(&exe))?)
     } else {
         match fs::remove_file(&plist) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(e.into()),
         }
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn sync_launch_agent(_enabled: bool) -> Result<(), String> {
+pub fn sync_launch_agent(_enabled: bool) -> Result<(), CommandError> {
     Ok(())
 }
 

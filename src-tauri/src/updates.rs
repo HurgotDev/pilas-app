@@ -1,6 +1,7 @@
 //! Updates via `tauri-plugin-updater`: background checks, a notice in the menu bar
 //! and in Settings, and installing only when the UI asks for it.
 
+use crate::error::CommandError;
 use crate::{settings, AppState};
 use serde::Serialize;
 use std::time::Duration;
@@ -22,13 +23,13 @@ pub struct UpdateMenu {
 }
 
 /// `Ok(None)` means up to date.
-async fn fetch(app: &AppHandle) -> Result<Option<UpdateInfo>, String> {
+async fn fetch(app: &AppHandle) -> Result<Option<UpdateInfo>, CommandError> {
     let update = app
         .updater()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| CommandError::UpdateCheck(e.to_string()))?
         .check()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| CommandError::UpdateCheck(e.to_string()))?;
     Ok(update.map(|u| UpdateInfo {
         version: u.version,
         notes: u.body,
@@ -71,7 +72,7 @@ pub fn update_status(state: State<'_, AppState>) -> Option<UpdateInfo> {
 
 /// Manual check: ignores the setting and does return errors to the UI.
 #[tauri::command]
-pub async fn check_updates_now(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+pub async fn check_updates_now(app: AppHandle) -> Result<Option<UpdateInfo>, CommandError> {
     let info = fetch(&app).await?;
     publish(&app, info.clone());
     Ok(info)
@@ -79,20 +80,20 @@ pub async fn check_updates_now(app: AppHandle) -> Result<Option<UpdateInfo>, Str
 
 /// Only runs on an explicit request from the UI.
 #[tauri::command]
-pub async fn install_update(app: AppHandle) -> Result<(), String> {
+pub async fn install_update(app: AppHandle) -> Result<(), CommandError> {
     if !settings::in_app_bundle() {
-        return Err("Updates can only be installed from Pilas.app, not in development".into());
+        return Err(CommandError::UpdateNotInAppBundle);
     }
     let update = app
         .updater()
-        .map_err(|e| e.to_string())?
+        .map_err(|e| CommandError::UpdateCheck(e.to_string()))?
         .check()
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or("No update is available")?;
+        .map_err(|e| CommandError::UpdateCheck(e.to_string()))?
+        .ok_or(CommandError::UpdateUnavailable)?;
     update
         .download_and_install(|_, _| {}, || {})
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| CommandError::UpdateInstall(e.to_string()))?;
     app.restart()
 }
