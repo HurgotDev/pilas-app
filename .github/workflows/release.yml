@@ -1,6 +1,6 @@
 name: Release
 
-# Cada push a main es un release; workflow_dispatch solo deja los artefactos para probar.
+# Every push to main is a release; workflow_dispatch only leaves the artifacts for testing.
 on:
   push:
     branches: [main]
@@ -85,7 +85,7 @@ jobs:
           done
           codesign --verify --deep --strict --verbose=2 "$app"
 
-      # Nombre estable: el endpoint de latest.json apunta a Pilas_universal.app.tar.gz.
+      # Stable name: the latest.json endpoint points at Pilas_universal.app.tar.gz.
       - name: Rename updater artifacts
         run: |
           macos=target/universal-apple-darwin/release/bundle/macos
@@ -160,9 +160,9 @@ jobs:
           git commit -m "Update pilas cask to $VERSION"
           git push origin HEAD:main
 
-  # Back-merge main -> develop por PR. Corre tras un release con éxito o
-  # cuando no hubo release (la etiqueta ya existía). Usa BACKMERGE_TOKEN: los
-  # PRs abiertos con GITHUB_TOKEN no disparan CI y el check policy nunca correría.
+  # Back-merge main -> develop via PR, after a successful release or when there
+  # was none (the tag already existed). Uses BACKMERGE_TOKEN because PRs opened
+  # with GITHUB_TOKEN do not trigger CI, so the policy check would never run.
   backmerge:
     needs: [check, release]
     if: >-
@@ -200,5 +200,5 @@ jobs:
               --title "Back-merge main into develop ($VERSION)" --body "$body")
             pr=$(gh pr view "$url" --json number --jq .number)
           fi
-          # Se fusiona cuando el repo lo permita (Allow auto-merge) y pasen los checks.
+          # Merges once the repo allows it (Allow auto-merge) and the checks pass.
           gh pr merge "$pr" --auto --merge

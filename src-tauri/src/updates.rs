@@ -1,5 +1,5 @@
-//! Actualizaciones con `tauri-plugin-updater`: búsqueda en segundo plano, aviso en
-//! el menú de la barra y en Ajustes, e instalación solo cuando la UI la pide.
+//! Updates via `tauri-plugin-updater`: background checks, a notice in the menu bar
+//! and in Settings, and installing only when the UI asks for it.
 
 use crate::{settings, AppState};
 use serde::Serialize;
@@ -8,20 +8,20 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::{AppHandle, Emitter, Manager, State, Wry};
 use tauri_plugin_updater::UpdaterExt;
 
-/// Mismo contrato que `UpdateInfo` en `ui/src/island/api.ts`.
+/// Same contract as `UpdateInfo` in `ui/src/island/api.ts`.
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateInfo {
     pub version: String,
     pub notes: Option<String>,
 }
 
-/// Entrada "Update to X…" del menú de la barra; solo está en el menú si hay versión nueva.
+/// The "Update to X…" item is only in the menu while a new version exists.
 pub struct UpdateMenu {
     pub menu: Menu<Wry>,
     pub item: MenuItem<Wry>,
 }
 
-/// Consulta el endpoint de `tauri.conf.json`. `Ok(None)` = ya está al día.
+/// `Ok(None)` means up to date.
 async fn fetch(app: &AppHandle) -> Result<Option<UpdateInfo>, String> {
     let update = app
         .updater()
@@ -35,20 +35,19 @@ async fn fetch(app: &AppHandle) -> Result<Option<UpdateInfo>, String> {
     }))
 }
 
-/// Guarda el resultado, avisa a las ventanas y actualiza el menú de la barra.
 fn publish(app: &AppHandle, info: Option<UpdateInfo>) {
     app.state::<AppState>().0.lock().unwrap().update = info.clone();
     let _ = app.emit("pilas://update", &info);
     let um = app.state::<UpdateMenu>();
-    let _ = um.menu.remove(&um.item); // si no estaba, no pasa nada
+    let _ = um.menu.remove(&um.item); // absent is fine
     if let Some(info) = &info {
         let _ = um.item.set_text(format!("Update to {}…", info.version));
         let _ = um.menu.insert(&um.item, 0);
     }
 }
 
-/// Primera búsqueda a los 10 s y después cada 24 h, si el ajuste está activo.
-/// Los fallos (sin red, release sin latest.json) se ignoran: se conserva el estado anterior.
+/// First check after 10 s, then every 24 h, while the setting is on.
+/// Failures (no network, release without latest.json) are ignored and keep the previous state.
 pub fn spawn_checks(app: AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(10));
@@ -70,7 +69,7 @@ pub fn update_status(state: State<'_, AppState>) -> Option<UpdateInfo> {
     state.0.lock().unwrap().update.clone()
 }
 
-/// Búsqueda manual: ignora el ajuste y sí devuelve los errores a la UI.
+/// Manual check: ignores the setting and does return errors to the UI.
 #[tauri::command]
 pub async fn check_updates_now(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
     let info = fetch(&app).await?;
@@ -78,11 +77,11 @@ pub async fn check_updates_now(app: AppHandle) -> Result<Option<UpdateInfo>, Str
     Ok(info)
 }
 
-/// Descarga, instala y reinicia. Solo se ejecuta por petición explícita de la UI.
+/// Only runs on an explicit request from the UI.
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> Result<(), String> {
     if !settings::in_app_bundle() {
-        return Err("Las actualizaciones solo se instalan desde Pilas.app, no en desarrollo".into());
+        return Err("Updates can only be installed from Pilas.app, not in development".into());
     }
     let update = app
         .updater()
@@ -90,7 +89,7 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
         .check()
         .await
         .map_err(|e| e.to_string())?
-        .ok_or("No hay ninguna actualización disponible")?;
+        .ok_or("No update is available")?;
     update
         .download_and_install(|_, _| {}, || {})
         .await

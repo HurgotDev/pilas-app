@@ -1,6 +1,6 @@
 [package]
 name = "pilas"
-description = "Pilas: la pilita del notch que te avisa cuando Claude Code te necesita"
+description = "Pilas: the notch mascot that tells you when Claude Code needs you"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -20,7 +20,7 @@ pilas-core = { path = "../crates/pilas-core" }
 pilas-jump = { path = "../crates/pilas-jump" }
 libc = "0.2"
 
-# Panel del notch (src-tauri/src/panel.rs): bindings de AppKit ya presentes en Cargo.lock vía Tauri.
+# Notch panel (src-tauri/src/panel.rs): AppKit bindings already in Cargo.lock through Tauri.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
 block2 = "0.6.2"

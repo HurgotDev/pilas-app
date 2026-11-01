@@ -1,10 +1,10 @@
-// Puente con el backend de Tauri. Los tipos reflejan `Snapshot` en src-tauri/src/lib.rs.
+// Types mirror `Snapshot` in src-tauri/src/lib.rs.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { SkinChoice } from "../skins/index.ts";
 
-export type SessionState = "en_espera" | "trabajando" | "pendiente" | "error";
-export type MascotState = "dormida" | "cargando" | "alerta";
+export type SessionState = "idle" | "working" | "pending" | "error";
+export type MascotState = "sleeping" | "working" | "alert";
 export type PermissionChoice = "allow" | "deny" | "always" | "terminal";
 export type ActionKind = "bash" | "edit" | "write" | "read" | "search_project" | "search_web" | "question" | "other";
 
@@ -42,11 +42,10 @@ export interface Snapshot {
 export const getSnapshot = () => invoke<Snapshot>("get_snapshot");
 export const resolvePermission = (requestId: string, choice: PermissionChoice) =>
   invoke<void>("resolve_permission", { requestId, choice });
-/** `answers = null` → responder en la terminal. */
+/** `answers = null` → answer in the terminal. */
 export const answerQuestion = (requestId: string, answers: Record<string, string> | null) =>
   invoke<void>("answer_question", { requestId, answers });
 export const jumpToSession = (sessionId: string) => invoke<void>("jump_to_session", { sessionId });
-/** Modo visible de la isla; el backend dimensiona la ventana del panel. */
 export const setIslandMode = (mode: "hidden" | "pill" | "open", openHeight?: number) =>
   invoke<void>("set_island_mode", { mode, openHeight: openHeight ?? null });
 
@@ -55,7 +54,6 @@ export const onPending = (cb: (requestId: string) => void) => listen<string>("pi
 export const onHover = (cb: (inside: boolean) => void) => listen<boolean>("pilas://hover", (e) => cb(e.payload));
 export const onFinished = (cb: (sessionId: string) => void) => listen<string>("pilas://finished", (e) => cb(e.payload));
 
-// Ajustes y instalador: tipos reflejan el contrato del backend (docs/SPEC.md → Instalación, ajustes y onboarding).
 export type ScreenChoice = "main" | "notch" | { named: string };
 
 export interface Settings {
@@ -64,10 +62,10 @@ export interface Settings {
   volume: number; // 0..1
   open_on_pending: boolean;
   launch_at_login: boolean;
-  lang: "en" | "es" | null; // null = idioma del sistema
+  lang: "en" | "es" | null; // null = system language
   onboarded: boolean;
   check_updates: boolean;
-  /** Disfraz de temporada; `auto` sigue la fecha (ver `ui/src/skins/index.ts`). */
+  /** `auto` follows the date (see `ui/src/skins/index.ts`). */
   skin: SkinChoice;
 }
 
@@ -86,21 +84,21 @@ export const getSettings = () => invoke<Settings>("get_settings");
 export const setSettings = (settings: Settings) => invoke<void>("set_settings", { settings });
 export const listScreens = () => invoke<string[]>("list_screens");
 export const hooksStatus = () => invoke<HooksInfo>("hooks_status");
-/** Rechaza con un texto de error (p. ej. JSON inválido). */
+/** Rejects with an error text (e.g. invalid JSON). */
 export const previewHooks = (action: HookAction) => invoke<DiffLine[]>("preview_hooks", { action });
-/** Devuelve la ruta del backup, o `null` si no había nada que respaldar. */
+/** Backup path, or `null` if there was nothing to back up. */
 export const applyHooks = (action: HookAction) => invoke<string | null>("apply_hooks", { action });
 export const onSettings = (cb: (s: Settings) => void) => listen<Settings>("pilas://settings", (e) => cb(e.payload));
 
-// Actualizaciones (src-tauri/src/updates.rs). `null` = al día.
+// src-tauri/src/updates.rs. `null` = up to date.
 export interface UpdateInfo {
   version: string;
   notes: string | null;
 }
 export const getUpdateStatus = () => invoke<UpdateInfo | null>("update_status");
-/** Rechaza con un texto de error (p. ej. sin red). */
+/** Rejects with an error text (e.g. no network). */
 export const checkUpdatesNow = () => invoke<UpdateInfo | null>("check_updates_now");
-/** Descarga, instala y reinicia Pilas. Solo al pulsar el botón. */
+/** Downloads, installs and restarts Pilas. Only on an explicit button press. */
 export const installUpdate = () => invoke<void>("install_update");
 export const onUpdate = (cb: (u: UpdateInfo | null) => void) =>
   listen<UpdateInfo | null>("pilas://update", (e) => cb(e.payload));

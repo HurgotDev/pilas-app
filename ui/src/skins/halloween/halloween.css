@@ -1,6 +1,6 @@
-/* Skin Halloween: todo bajo :root[data-skin="halloween"]; nunca toca la pilita (docs/SPEC.md → Skins). */
+/* Halloween skin: everything under :root[data-skin="halloween"]; never touches the mascot (docs/SPEC.md → Skins). */
 
-/* El mismo color de estado recortado en silueta de calabaza; 10 px con margen -1 px ocupa lo mismo que el punto de 8 px. */
+/* Same state color clipped to a pumpkin; 10 px with a -1 px margin takes the same space as the 8 px dot. */
 :root[data-skin="halloween"] .dot {
   width: 10px; height: 10px; margin: -1px; border-radius: 0;
   --pumpkin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect x='4.4' y='0' width='1.3' height='2.6' rx='.5'/%3E%3Cellipse cx='3.2' cy='6' rx='2.8' ry='3.5'/%3E%3Cellipse cx='6.8' cy='6' rx='2.8' ry='3.5'/%3E%3Cellipse cx='5' cy='6' rx='2' ry='3.8'/%3E%3C/svg%3E");
@@ -8,14 +8,13 @@
   -webkit-mask-size: contain; mask-size: contain;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
 }
-/* Contador en calabaza (se estira con 2 cifras); el padding superior deja el tallo libre. */
+/* Pumpkin counter (stretches with 2 digits); the top padding leaves room for the stem. */
 :root[data-skin="halloween"] .badge {
   height: 22px; min-width: 22px; padding: 3px 6px 0; box-sizing: border-box; border-radius: 0; color: #1B1B2E;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' preserveAspectRatio='none'%3E%3Cpath d='M10 1.5 Q11.5 0 12.6 1.2 L12.2 5.5 L10.3 5.5 Z' fill='%233E7B2E'/%3E%3Cellipse cx='6.6' cy='13.6' rx='6.3' ry='8' fill='%23E0700E'/%3E%3Cellipse cx='15.4' cy='13.6' rx='6.3' ry='8' fill='%23E0700E'/%3E%3Cellipse cx='11' cy='13.6' rx='5.4' ry='8.3' fill='%23FF8A1F'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
 }
-/* Ambiente: la capa la monta island.ts detrás de .pill/.panel y sin clics. */
 :root[data-skin="halloween"] .island:not([data-size="hidden"]) { box-shadow: inset 0 -8px 10px -8px rgba(255,138,31,.45); }
-/* El carril mide lo que la isla: trasladarlo 100% + 14 px lleva al murciélago de un borde al otro. */
+/* The lane is as wide as the island: translating it 100% + 14 px carries the bat edge to edge. */
 :root[data-skin="halloween"] .bat-track { position: absolute; top: 6px; left: -14px; width: 100%; animation: batfly 9s ease-in-out infinite alternate; }
 :root[data-skin="halloween"] .bat { display: block; width: 14px; height: 6.3px; fill: #9B7BE0; animation: batbob 1.3s ease-in-out infinite; }
 :root[data-skin="halloween"] .wing { transform-box: fill-box; animation: batflap .25s ease-in-out infinite alternate; }
@@ -33,7 +32,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-skin="halloween"] .bat-track, :root[data-skin="halloween"] .ghost { display: none !important; }
 }
-/* Acentos naranja; los colores de estado y Permitir/Denegar no cambian. */
+/* Orange accents; state colors and Allow/Deny stay unchanged. */
 :root[data-skin="halloween"] { --line: #3a2410; }
 :root[data-skin="halloween"] .link { color: #FF8A1F; }
 :root[data-skin="halloween"] :focus-visible { outline: 2px solid #FF8A1F; outline-offset: 2px; }

@@ -1,6 +1,6 @@
 [package]
 name = "pilas-jump"
-description = "Saltar a la terminal de una sesión (Ghostty exacto, el resto: traer la app al frente)"
+description = "Jump to a session's terminal (exact in Ghostty, otherwise bring the app to the front)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

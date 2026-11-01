@@ -1,11 +1,11 @@
-//! Isla como panel del notch (solo macOS; en el resto, no-op).
+//! The island as a notch panel (macOS only; a no-op elsewhere).
 //!
-//! La ventana "island" se convierte en `NSPanel` (sin robar foco, sobre la barra
-//! de menú, en todos los Spaces) y toma exactamente el tamaño del modo visible:
-//! fuera de esa zona los clics llegan a la app de debajo.
+//! The "island" window becomes an `NSPanel` (never steals focus, above the menu
+//! bar, on every Space) sized exactly to the visible mode, so clicks outside it
+//! reach the app below.
 //!
-//! La geometría es pura y se prueba sin AppKit; las coordenadas son las de
-//! AppKit (origen abajo a la izquierda).
+//! Geometry is pure and tested without AppKit; coordinates are AppKit's
+//! (origin at the bottom left).
 
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
@@ -15,12 +15,12 @@ const OPEN_W: f64 = 420.0;
 const OPEN_MAX_H: f64 = 360.0;
 const PILL_H: f64 = 32.0;
 const HIDDEN_H: f64 = 6.0;
-/// Ancho de la píldora sin notch (monitores externos).
+/// Pill width without a notch (external displays).
 const PILL_NO_NOTCH_W: f64 = 180.0;
-/// Margen a cada lado del notch para los iconos de la píldora.
+/// Margin on each side of the notch for the pill icons.
 const PILL_PAD: f64 = 48.0;
 
-/// Modo visible de la isla; lo fija la UI con `set_island_mode`.
+/// Set by the UI through `set_island_mode`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum IslandMode {
@@ -30,16 +30,16 @@ pub enum IslandMode {
     Open,
 }
 
-/// Pantalla donde vive la isla. Se guarda en los ajustes: `"main"`, `"notch"` o `{ "named": "<nombre>" }`.
+/// Persisted in settings as `"main"`, `"notch"` or `{ "named": "<name>" }`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ScreenChoice {
-    /// La que tiene la barra de menú (índice 0 de `NSScreen.screens`).
+    /// The one with the menu bar (index 0 of `NSScreen.screens`).
     #[default]
     Main,
-    /// La primera con notch; si no hay ninguna, la principal.
+    /// The first one with a notch, else the main one.
     Notch,
-    /// Por `localizedName`; si no existe, la principal.
+    /// By `localizedName`, else the main one.
     Named(String),
 }
 
@@ -55,13 +55,12 @@ pub struct Rect {
 pub struct ScreenInfo {
     pub name: String,
     pub frame: Rect,
-    /// Borde superior de `visibleFrame` (bajo la barra de menú).
+    /// Top edge of `visibleFrame` (below the menu bar).
     pub visible_top: f64,
-    /// Ancho del notch, si la pantalla lo tiene.
     pub notch: Option<f64>,
 }
 
-/// Índice de la pantalla elegida; `screens` no puede estar vacío.
+/// `screens` must not be empty.
 pub fn pick_screen(choice: &ScreenChoice, screens: &[ScreenInfo]) -> usize {
     let found = match choice {
         ScreenChoice::Main => return 0,
@@ -75,7 +74,6 @@ fn pill_width(screen: &ScreenInfo) -> f64 {
     screen.notch.map_or(PILL_NO_NOTCH_W, |n| n + 2.0 * PILL_PAD)
 }
 
-/// Marco de la isla en coordenadas de AppKit, centrado en X.
 pub fn island_frame(screen: &ScreenInfo, mode: IslandMode, open_height: f64) -> Rect {
     let pill_w = pill_width(screen);
     let (w, h) = match mode {
@@ -83,7 +81,7 @@ pub fn island_frame(screen: &ScreenInfo, mode: IslandMode, open_height: f64) -> 
         IslandMode::Pill => (pill_w, PILL_H),
         IslandMode::Open => (OPEN_W, open_height.clamp(0.0, OPEN_MAX_H)),
     };
-    // Con notch nace del borde superior de la pantalla; sin él, cuelga bajo la barra de menú.
+    // With a notch it grows from the top screen edge; without one it hangs below the menu bar.
     let top = match screen.notch {
         Some(_) => screen.frame.y + screen.frame.h,
         None => screen.visible_top,
@@ -114,11 +112,10 @@ mod imp {
     use std::rc::Rc;
     use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
-    /// Token del observador de notificaciones que devuelve `addObserverForName…`.
     type Observer = Retained<ProtocolObject<dyn NSObjectProtocol>>;
 
     define_class!(
-        /// NSWindow que puede ser clave (recibir teclado) sin activar la app.
+        /// Can become key (receive keyboard input) without activating the app.
         #[unsafe(super(NSPanel, NSWindow, objc2_app_kit::NSResponder, objc2::runtime::NSObject))]
         #[name = "PilasPanel"]
         struct PilasPanel;
@@ -136,7 +133,7 @@ mod imp {
     }
 
     define_class!(
-        /// Dueño del área de seguimiento: avisa a la UI cuando el cursor entra o sale de la ventana.
+        /// Tracking area owner: tells the UI when the cursor enters or leaves the window.
         #[unsafe(super(NSObject))]
         #[name = "PilasHoverOwner"]
         #[ivars = HoverOwnerIvars]
@@ -155,11 +152,10 @@ mod imp {
         }
     );
 
-    /// Área de seguimiento sobre todo el contenido: funciona aunque la app no esté activa
-    /// (WKWebView no emite mouseenter/mouseleave del DOM en ese caso).
+    /// Works even while the app is inactive, when WKWebView emits no DOM mouseenter/mouseleave.
     ///
     /// # Safety
-    /// Debe llamarse en el hilo principal con la ventana ya convertida en panel.
+    /// Must be called on the main thread after the window became a panel.
     unsafe fn install_hover_tracking(window: &NSWindow, app: AppHandle) {
         let Some(view) = window.contentView() else { return };
         let owner = HoverOwner::alloc().set_ivars(HoverOwnerIvars { app });
@@ -176,7 +172,7 @@ mod imp {
             None,
         );
         view.addTrackingArea(&area);
-        // El área no retiene a su dueño: el dueño vive con la app.
+        // The area does not retain its owner, so the owner lives as long as the app.
         std::mem::forget(owner);
     }
 
@@ -199,7 +195,7 @@ mod imp {
             .map(|s| {
                 let frame = s.frame();
                 let visible = s.visibleFrame();
-                // Con notch, la barra de menú deja huecos a izquierda y derecha: el notch es lo que queda.
+                // With a notch the menu bar leaves areas left and right: the notch is what remains.
                 let notch = (s.safeAreaInsets().top > 0.0).then(|| {
                     frame.size.width - s.auxiliaryTopLeftArea().size.width - s.auxiliaryTopRightArea().size.width
                 });
@@ -213,11 +209,11 @@ mod imp {
             .collect()
     }
 
-    /// Convierte la ventana en panel. Llamar desde el hilo principal (setup).
+    /// Call from the main thread (setup).
     pub fn make_panel(window: &WebviewWindow) {
         let Ok(ptr) = window.ns_window() else { return };
-        // SAFETY: `ptr` es el NSWindow de la ventana; PilasPanel solo añade un método,
-        // así que el cambio de clase es válido. Hilo principal por contrato.
+        // SAFETY: `ptr` is the window's NSWindow; PilasPanel only adds a method,
+        // so the class swap is valid. Main thread by contract.
         unsafe {
             ffi::object_setClass(ptr as *mut AnyObject, PilasPanel::class());
             let w: &NSWindow = &*(ptr as *const NSWindow);
@@ -235,7 +231,7 @@ mod imp {
         }
     }
 
-    /// Recoloca la isla en la pantalla elegida. No roba foco (nunca `makeKey`).
+    /// Never steals focus (never `makeKey`).
     pub fn place(app: &AppHandle, screen: ScreenChoice, mode: IslandMode, open_height: Option<f64>) {
         let handle = app.clone();
         let _ = app.run_on_main_thread(move || {
@@ -249,17 +245,17 @@ mod imp {
             }
             let info = &screens[pick_screen(&screen, &screens)];
             let frame = island_frame(info, mode, open_height.unwrap_or(OPEN_MAX_H));
-            // SAFETY: `ptr` sigue siendo el NSWindow de "island" y estamos en el hilo principal.
+            // SAFETY: `ptr` is still the "island" NSWindow and this runs on the main thread.
             let w: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
             w.setFrame_display(to_ns(&frame), true);
         });
     }
 
-    /// Trae al frente la ventana `label` y la deja como key con la app activa. WebKit toma su
-    /// estado activo del momento en que la ventana pasa a ser key, y `activate` es asíncrono:
-    /// si ya está activa se hace key directo; si no, se muestra sin foco y se hace key al
-    /// terminar la activación. En la cola del hilo principal, para que corra después del
-    /// `build` pendiente (la isla no usa esto: nunca roba foco).
+    /// Brings `label` to the front as key with the app active. WebKit takes its active state
+    /// from the moment the window becomes key, and `activate` is async: if the app is already
+    /// active the window becomes key at once; otherwise it is shown unfocused and made key once
+    /// activation finishes. Queued on the main thread so it runs after the pending `build`
+    /// (the island never uses this: it never steals focus).
     pub fn bring_to_front(app: &AppHandle, label: &'static str) {
         let handle = app.clone();
         let _ = app.run_on_main_thread(move || {
@@ -267,34 +263,34 @@ mod imp {
                 return;
             };
             let Ok(ptr) = window.ns_window() else { return };
-            // SAFETY: `ptr` es el NSWindow de `label` y estamos en el hilo principal.
+            // SAFETY: `ptr` is the NSWindow of `label` and this runs on the main thread.
             let w: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
             let ns_app = NSApplication::sharedApplication(mtm);
             if ns_app.isActive() {
                 w.makeKeyAndOrderFront(None);
                 return;
             }
-            // Visible aunque macOS rechace la activación.
+            // Visible even if macOS refuses the activation.
             w.orderFrontRegardless();
-            // `activate()` exige macOS 14+ y el mínimo es 13.
+            // `activate()` needs macOS 14+ and the minimum is 13.
             #[allow(deprecated)]
             ns_app.activateIgnoringOtherApps(true);
-            // Observador de un solo disparo: se quita a sí mismo al activarse la app.
+            // One-shot observer: removes itself once the app activates.
             let token: Rc<RefCell<Option<Observer>>> = Rc::default();
             let slot = token.clone();
             let block = RcBlock::new(move |_: NonNull<NSNotification>| {
                 let Some(token) = slot.borrow_mut().take() else { return };
-                // SAFETY: el token vino de `addObserverForName…` del mismo centro.
+                // SAFETY: the token came from `addObserverForName…` on the same center.
                 unsafe { NSNotificationCenter::defaultCenter().removeObserver(token.as_ref()) };
                 if let Some(window) = handle.get_webview_window(label) {
                     if let Ok(ptr) = window.ns_window() {
-                        // SAFETY: igual que arriba; el bloque corre en el hilo principal.
+                        // SAFETY: as above; the block runs on the main thread.
                         let w: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
                         w.makeKeyAndOrderFront(None);
                     }
                 }
             });
-            // SAFETY: el centro copia el bloque; el token vive en `token` hasta que se dispare.
+            // SAFETY: the center copies the block; the token lives in `token` until it fires.
             let observer = unsafe {
                 NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(
                     Some(NSApplicationDidBecomeActiveNotification),
@@ -307,8 +303,7 @@ mod imp {
         });
     }
 
-    /// Nombres de las pantallas (`localizedName`), en el orden de `NSScreen.screens`.
-    /// Pide el dato al hilo principal; no llamar desde él (bloquearía).
+    /// In `NSScreen.screens` order. Asks the main thread, so never call it from there (deadlock).
     pub fn screen_names(app: &AppHandle) -> Vec<String> {
         let (tx, rx) = std::sync::mpsc::channel();
         let _ = app.run_on_main_thread(move || {
@@ -323,10 +318,9 @@ mod imp {
         rx.recv().unwrap_or_default()
     }
 
-    /// Llama a `on_change` cuando cambian las pantallas (monitor conectado, resolución…).
     pub fn watch_screens(on_change: impl Fn() + 'static) {
         let block = RcBlock::new(move |_: NonNull<NSNotification>| on_change());
-        // SAFETY: el centro de notificaciones copia el bloque; el observador vive con la app.
+        // SAFETY: the notification center copies the block; the observer lives as long as the app.
         let token = unsafe {
             NSNotificationCenter::defaultCenter().addObserverForName_object_queue_usingBlock(
                 Some(NSApplicationDidChangeScreenParametersNotification),
@@ -383,31 +377,31 @@ mod tests {
     }
 
     #[test]
-    fn main_es_siempre_el_indice_cero() {
-        let screens = [screen("externa", 1512.0, None), screen("interna", 0.0, Some(200.0))];
+    fn main_is_always_index_zero() {
+        let screens = [screen("external", 1512.0, None), screen("internal", 0.0, Some(200.0))];
         assert_eq!(pick_screen(&ScreenChoice::Main, &screens), 0);
     }
 
     #[test]
-    fn notch_elige_la_primera_con_notch_o_la_principal() {
-        let screens = [screen("externa", 1512.0, None), screen("interna", 0.0, Some(200.0))];
+    fn notch_picks_first_with_notch_or_main() {
+        let screens = [screen("external", 1512.0, None), screen("internal", 0.0, Some(200.0))];
         assert_eq!(pick_screen(&ScreenChoice::Notch, &screens), 1);
-        let sin_notch = [screen("externa", 0.0, None), screen("otra", 1512.0, None)];
-        assert_eq!(pick_screen(&ScreenChoice::Notch, &sin_notch), 0);
+        let no_notch = [screen("external", 0.0, None), screen("other", 1512.0, None)];
+        assert_eq!(pick_screen(&ScreenChoice::Notch, &no_notch), 0);
     }
 
     #[test]
-    fn named_busca_por_nombre_o_cae_a_la_principal() {
-        let screens = [screen("interna", 0.0, Some(200.0)), screen("Studio", 1512.0, None)];
-        let elegida = ScreenChoice::Named("Studio".into());
-        assert_eq!(pick_screen(&elegida, &screens), 1);
-        let inexistente = ScreenChoice::Named("Nada".into());
-        assert_eq!(pick_screen(&inexistente, &screens), 0);
+    fn named_finds_by_name_or_falls_back_to_main() {
+        let screens = [screen("internal", 0.0, Some(200.0)), screen("Studio", 1512.0, None)];
+        let chosen = ScreenChoice::Named("Studio".into());
+        assert_eq!(pick_screen(&chosen, &screens), 1);
+        let missing = ScreenChoice::Named("Nothing".into());
+        assert_eq!(pick_screen(&missing, &screens), 0);
     }
 
     #[test]
-    fn con_notch_la_pildora_es_notch_mas_margenes_y_pega_al_borde() {
-        let s = screen("interna", 0.0, Some(200.0));
+    fn with_notch_pill_is_notch_plus_margins_at_top_edge() {
+        let s = screen("internal", 0.0, Some(200.0));
         let f = island_frame(&s, IslandMode::Pill, 0.0);
         assert_eq!(f.w, 296.0);
         assert_eq!(f.h, 32.0);
@@ -416,8 +410,8 @@ mod tests {
     }
 
     #[test]
-    fn sin_notch_la_pildora_cuelga_de_la_barra_de_menu() {
-        let s = screen("externa", 1512.0, None);
+    fn without_notch_pill_hangs_below_menu_bar() {
+        let s = screen("external", 1512.0, None);
         let f = island_frame(&s, IslandMode::Pill, 0.0);
         assert_eq!(f.w, 180.0);
         assert_eq!(f.x, 1512.0 + (1512.0 - 180.0) / 2.0);
@@ -425,22 +419,22 @@ mod tests {
     }
 
     #[test]
-    fn oculta_mide_seis_de_alto_con_el_ancho_de_la_pildora() {
-        let s = screen("interna", 0.0, Some(200.0));
-        let oculta = island_frame(&s, IslandMode::Hidden, 0.0);
+    fn hidden_is_six_high_with_pill_width() {
+        let s = screen("internal", 0.0, Some(200.0));
+        let hidden = island_frame(&s, IslandMode::Hidden, 0.0);
         let pill = island_frame(&s, IslandMode::Pill, 0.0);
-        assert_eq!(oculta.h, 6.0);
-        assert_eq!(oculta.w, pill.w);
-        assert_eq!(oculta.y + oculta.h, 982.0);
+        assert_eq!(hidden.h, 6.0);
+        assert_eq!(hidden.w, pill.w);
+        assert_eq!(hidden.y + hidden.h, 982.0);
     }
 
     #[test]
-    fn abierta_es_420_y_la_altura_se_acota_a_360() {
-        let s = screen("interna", 0.0, Some(200.0));
-        let alta = island_frame(&s, IslandMode::Open, 500.0);
-        assert_eq!((alta.w, alta.h), (420.0, 360.0));
-        let baja = island_frame(&s, IslandMode::Open, 120.0);
-        assert_eq!(baja.h, 120.0);
-        assert_eq!(baja.x, (1512.0 - 420.0) / 2.0);
+    fn open_is_420_wide_and_height_clamps_to_360() {
+        let s = screen("internal", 0.0, Some(200.0));
+        let tall = island_frame(&s, IslandMode::Open, 500.0);
+        assert_eq!((tall.w, tall.h), (420.0, 360.0));
+        let short = island_frame(&s, IslandMode::Open, 120.0);
+        assert_eq!(short.h, 120.0);
+        assert_eq!(short.x, (1512.0 - 420.0) / 2.0);
     }
 }

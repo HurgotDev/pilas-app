@@ -1,4 +1,4 @@
-/* Ventana normal de macOS (~520x560): claro y oscuro según el sistema, tipografía del sistema. */
+/* Regular macOS window (~520x560): light and dark follow the system. */
 :root {
   --bg: #f5f5f7;
   --card: #ffffff;
@@ -40,14 +40,12 @@ p { margin: 0; }
 .step { display: flex; flex-direction: column; gap: 10px; }
 .hero { height: 96px; align-self: center; margin-bottom: 4px; }
 
-/* Onboarding: indicador de paso y navegación al pie. */
 .steps { display: flex; gap: 6px; justify-content: center; }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
 .dot.on { background: var(--accent); }
 .nav { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
 .nav > span { width: 1px; }
 
-/* Grupos de ajustes: tarjetas con filas separadas por líneas. */
 .group { background: var(--card); border-radius: 10px; padding: 2px 14px; display: flex; flex-direction: column; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; min-height: 22px;
        border-top: 1px solid var(--line); }
@@ -69,7 +67,6 @@ button:disabled { opacity: .45; cursor: default; }
 button.link, .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Bloque de diff: monoespaciado; + en verde, - en rojo, líneas sin cambios atenuadas. */
 .diff { font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--bg); border-radius: 8px;
         padding: 8px 10px; overflow-x: auto; white-space: pre; max-height: 220px; overflow-y: auto; }
 .diff .add { color: var(--add); }
@@ -80,6 +77,5 @@ input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var
 input[type="range"] { accent-color: var(--accent); width: 160px; }
 select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 
-/* Notas de versión plegables (Ajustes → Actualizaciones). */
 details summary { cursor: pointer; color: var(--accent); margin-bottom: 6px; }
 .notes { white-space: pre-wrap; font-size: 12px; line-height: 1.4; color: var(--muted); margin: 0; }

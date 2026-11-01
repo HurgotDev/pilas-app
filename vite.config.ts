@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
 
-// La UI vive en ui/; Tauri sirve dist/ en producción y localhost:1420 en desarrollo.
+// Tauri serves dist/ in production and localhost:1420 in development.
 export default defineConfig({
   root: "ui",
   clearScreen: false,

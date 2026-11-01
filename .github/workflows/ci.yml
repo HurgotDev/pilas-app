@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      # tauri::generate_context! necesita dist/ en tiempo de compilación.
+      # tauri::generate_context! needs dist/ at compile time.
       - run: npm ci
       - run: npm run build
       - run: cargo fmt --all -- --check
@@ -37,7 +37,7 @@ jobs:
       - run: npm run build
       - run: npm run test:scripts
 
-  # Check requerido: corre en cada evento; la lógica por rama vive en el step.
+  # Required check: runs on every event; the per-branch logic lives in the step.
   policy:
     runs-on: ubuntu-latest
     steps:
@@ -75,7 +75,7 @@ jobs:
               head_version=$(node scripts/release.mjs version)
               main_version=$(git show origin/main:src-tauri/tauri.conf.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')
               highest=$(printf '%s\n%s\n' "$main_version" "$head_version" | sort -V | tail -n1)
-              # Misma versión: solo fragmentos "none", no se publica release.
+              # Same version: only "none" fragments, so no release is published.
               if [ "$head_version" = "$main_version" ]; then
                 echo "::notice::Version unchanged ($head_version): merging will not publish a release."
               elif [ "$highest" != "$head_version" ]; then
@@ -93,7 +93,7 @@ jobs:
                 echo "Back-merge PR from main: no fragment required."
               else
                 added=$(git diff --name-only --diff-filter=A origin/develop...HEAD)
-                # grep -c lee toda la entrada: sin SIGPIPE bajo pipefail.
+                # grep -c reads all input: no SIGPIPE under pipefail.
                 count=$(printf '%s\n' "$added" | grep -E '^\.changes/[^/]+\.md$' | grep -cv '^\.changes/README\.md$' || true)
                 if [ "$count" -eq 0 ]; then
                   echo "::error::PRs into develop need a changelog fragment in .changes/<slug>.md, written in English (see .changes/README.md)."

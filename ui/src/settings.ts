@@ -1,4 +1,4 @@
-// Ventana de Ajustes y onboarding (docs/SPEC.md → Instalación, ajustes y onboarding).
+// Settings window and onboarding (docs/SPEC.md → Instalación, ajustes y onboarding).
 import "./mascot/pilita";
 import * as api from "./island/api";
 import { configure, play } from "./sound/sfx";
@@ -18,33 +18,32 @@ type BoolKey = "sound_enabled" | "open_on_pending" | "launch_at_login" | "check_
 let settings: api.Settings;
 let hooks: api.HooksInfo = { status: "missing", settings_path: "" };
 let screens: string[] = [];
-let step = 0; // paso actual del onboarding
-let diff: { action: api.HookAction; lines: api.DiffLine[] } | null = null; // se muestra antes de escribir
-let backup: string | null = null; // copia de seguridad del último cambio
-let error = ""; // último error del instalador o de guardar
-let busy = false; // hay una llamada al instalador en curso
-let update: api.UpdateInfo | null = null; // versión nueva conocida, o null si está al día
-let version = ""; // versión instalada
-let checking = false; // búsqueda manual en curso
-let installing = false; // descarga e instalación en curso
-let confirmInstall = false; // pide confirmación antes de reiniciar
-let updateError = ""; // último error de actualizaciones
+let step = 0;
+let diff: { action: api.HookAction; lines: api.DiffLine[] } | null = null; // shown before writing
+let backup: string | null = null;
+let error = ""; // last installer or save error
+let busy = false; // an installer call is in flight
+let update: api.UpdateInfo | null = null; // null when up to date
+let version = ""; // installed version
+let checking = false; // manual check in flight
+let installing = false;
+let confirmInstall = false; // ask before restarting
+let updateError = "";
 
 const root = document.getElementById("app")!;
 
-// Skin efectiva de hoy para la pilita y los sonidos de esta ventana.
 const skinNow = () => resolveSkin(settings.skin, new Date());
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
-// Valor del <select> de pantalla: "main", "notch" o "named:<nombre>".
+// Screen <select> value: "main", "notch" or "named:<name>".
 const screenValue = (s: api.ScreenChoice) => (typeof s === "string" ? s : `named:${s.named}`);
 const screenFrom = (v: string): api.ScreenChoice =>
   v === "main" || v === "notch" ? v : { named: v.slice("named:".length) };
 
-// Diff en bloque monoespaciado; las tiras largas sin cambios se pliegan en una línea.
+// Long unchanged runs fold into one line.
 function diffHtml(lines: api.DiffLine[]): string {
   const out: string[] = [];
   let run: api.DiffLine[] = [];
@@ -74,7 +73,7 @@ function backupLine(): string {
   return backup ? `<p class="muted">${esc(t("hooks.backup", { path: backup }))}</p>` : "";
 }
 
-// Búsqueda manual: el error se muestra en la sección de actualizaciones.
+// Manual check: the error shows in the updates section.
 async function checkNow(): Promise<void> {
   checking = true;
   updateError = "";
@@ -88,7 +87,7 @@ async function checkNow(): Promise<void> {
   render();
 }
 
-// Solo tras confirmar. Si todo va bien Pilas se reinicia y esta vista desaparece.
+// Only after confirming. On success Pilas restarts and this view goes away.
 async function install(): Promise<void> {
   installing = true;
   updateError = "";
@@ -103,7 +102,7 @@ async function install(): Promise<void> {
   }
 }
 
-// Guarda al instante y aplica el sonido en esta ventana. Un fallo se muestra en la vista.
+// Saves at once and applies sound in this window; a failure shows in the view.
 function save(): void {
   configure({ enabled: settings.sound_enabled, volume: settings.volume, skin: skinNow() });
   api.setSettings(settings).catch((e: unknown) => {
@@ -112,7 +111,7 @@ function save(): void {
   });
 }
 
-// Pide el diff de install/uninstall; nada se escribe hasta confirmar.
+// Nothing is written until confirmed.
 async function showDiff(action: api.HookAction): Promise<void> {
   busy = true;
   error = "";
@@ -167,7 +166,7 @@ const check = (key: BoolKey, label: Key) =>
   `<label class="row"><span>${t(label)}</span><input type="checkbox" data-bool="${key}" ${settings[key] ? "checked" : ""}></label>`;
 
 const STEP_BODY: (() => string)[] = [
-  () => `<pilas-mascot class="hero" state="cargando" skin="${skinNow()}"></pilas-mascot>
+  () => `<pilas-mascot class="hero" state="working" skin="${skinNow()}"></pilas-mascot>
     <h1>${t("onb.welcome.title")}</h1><p>${t("onb.welcome.body")}</p>`,
   connectBody,
   () => `<h1>${t("onb.automation.title")}</h1><p>${t("onb.automation.body")}</p>`,
@@ -178,7 +177,7 @@ const STEP_BODY: (() => string)[] = [
 function onboardingView(): string {
   const connected = hooks.status === "ok";
   const dots = Array.from({ length: STEPS }, (_, i) => `<span class="dot${i === step ? " on" : ""}"></span>`).join("");
-  const blocked = step === 1 && !connected; // Next espera a conectar; Omitir siempre deja pasar
+  const blocked = step === 1 && !connected; // Next waits for the connection; Skip always lets you through
   const skip = blocked ? `<button class="link" data-next>${t("onb.skip")}</button>` : "";
   const next =
     step === STEPS - 1
@@ -301,7 +300,7 @@ root.addEventListener("click", (e) => {
   else if (el.hasAttribute("data-done")) { settings.onboarded = true; save(); render(); }
 });
 
-// "change" llega al soltar el control de volumen y al cambiar teclas de flecha; no se re-pinta para no perder el foco.
+// "change" fires on volume release and arrow keys; no re-render so focus is not lost.
 root.addEventListener("change", (e) => {
   const el = e.target as HTMLElement;
   if (el instanceof HTMLInputElement && el.dataset.bool) {
@@ -310,7 +309,7 @@ root.addEventListener("change", (e) => {
   } else if (el instanceof HTMLInputElement && el.hasAttribute("data-volume")) {
     settings.volume = Number(el.value) / 100;
     save();
-    play("toque");
+    play("tap");
   } else if (el instanceof HTMLSelectElement && el.hasAttribute("data-screen")) {
     settings.screen = screenFrom(el.value);
     save();
@@ -344,7 +343,7 @@ async function init(): Promise<void> {
     update = u;
     render();
   });
-  // Re-pinta solo si cambian el idioma o el paso de onboarding; el resto ya está en pantalla.
+  // Re-render only when the language or onboarding step changes; the rest is already on screen.
   api.onSettings((s) => {
     const prev = settings;
     const before = lang;

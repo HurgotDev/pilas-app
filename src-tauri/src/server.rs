@@ -1,4 +1,4 @@
-//! Servidor del socket local: una conexión por invocación de `pilas-hook`, NDJSON.
+//! Local socket server: one NDJSON connection per `pilas-hook` run.
 
 use crate::{emit_snapshot, AppState, Outcome, PendingRequest};
 use pilas_core::decision;
@@ -13,12 +13,12 @@ pub fn start(app: AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::UnixListener;
 
-    let path = pilas_core::paths::socket_path().ok_or("no se pudo resolver la ruta del socket")?;
+    let path = pilas_core::paths::socket_path().ok_or("could not resolve the socket path")?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
         std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
     }
-    let _ = std::fs::remove_file(&path); // socket huérfano de una ejecución anterior
+    let _ = std::fs::remove_file(&path); // orphan socket from an earlier run
     let listener = UnixListener::bind(&path)?;
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
 
@@ -33,7 +33,7 @@ pub fn start(app: AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(not(unix))]
 pub fn start(_app: AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    Ok(()) // TODO(v1.2): named pipe en Windows
+    Ok(()) // TODO(v1.2): named pipe on Windows
 }
 
 #[cfg(unix)]
@@ -48,10 +48,10 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
         return;
     };
     if msg.v > PROTOCOL_VERSION {
-        return; // versión más nueva que la nuestra: el hook sale sin decisión
+        return; // newer than us: the hook exits without a decision
     }
 
-    // Antes del lock: osascript tarda ~100 ms y no debe bloquear la UI.
+    // Before the lock: osascript takes ~100 ms and must not block the UI.
     let quiet = msg.blocking
         && pilas_jump::is_focused(&pilas_jump::JumpTarget {
             term_program: msg.term_program.clone(),
@@ -72,7 +72,7 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
             .unwrap_or_default()
             .to_string();
         if quiet {
-            // La terminal enfocada pregunta ella misma: no se encola y se deshace el pendiente de `apply`.
+            // The focused terminal asks by itself: do not queue, and undo the pending count from `apply`.
             inner.store.resolve_pending(&session_id);
             None
         } else if msg.blocking {
@@ -87,10 +87,10 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
                 },
             );
             inner.queue.push_back(msg.id.clone());
-            // Vigila si el hook se va (el usuario respondió en la terminal o Claude Code canceló).
+            // Watch for the hook leaving (answered in the terminal or cancelled by Claude Code).
             std::thread::spawn(move || {
                 let mut buf = [0u8; 1];
-                let _ = reader.get_mut().read(&mut buf); // EOF o error = el hook cerró
+                let _ = reader.get_mut().read(&mut buf); // EOF or error means the hook closed
                 let _ = tx.send(Outcome::HookGone);
             });
             Some(rx)
@@ -100,20 +100,20 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
     };
     emit_snapshot(&app);
     if quiet {
-        // Igual que "Responder en la terminal": sin stdout, Claude Code muestra su diálogo nativo.
+        // Same as "answer in the terminal": without stdout Claude Code shows its native dialog.
         let stdout = (msg.event == "PreToolUse").then(decision::question_to_terminal);
         write_reply(stream, &AppReply::new(msg.id, stdout));
         return;
     }
     if msg.blocking {
-        let _ = app.emit("pilas://pending", msg.id.clone()); // la UI abre la isla y suena la alerta
+        let _ = app.emit("pilas://pending", msg.id.clone()); // the UI opens the island and plays the alert
     }
 
     let Some(rx) = rx else { return };
     match rx.recv() {
         Ok(Outcome::Reply(reply)) => write_reply(stream, &reply),
         Ok(Outcome::HookGone) | Err(_) => {
-            // Descartar la tarjeta: la decisión ya no tiene a quién llegar.
+            // Drop the card: the decision has nowhere to go.
             let mut inner = state.0.lock().unwrap();
             if let Some(req) = inner.pending.remove(&msg.id) {
                 inner.queue.retain(|r| r != &msg.id);
@@ -125,7 +125,6 @@ fn handle(app: AppHandle, stream: std::os::unix::net::UnixStream) {
     }
 }
 
-/// Escribe la respuesta como una línea JSON hacia el hook.
 #[cfg(unix)]
 fn write_reply(mut stream: std::os::unix::net::UnixStream, reply: &AppReply) {
     if let Ok(mut out) = serde_json::to_string(reply) {
