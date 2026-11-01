@@ -32,7 +32,10 @@ html, body { margin: 0; background: transparent; overflow: hidden; user-select: 
          transition: opacity .15s ease, visibility 0s .3s; opacity: 0; visibility: hidden; }
 .island[data-size="open"] .panel { opacity: 1; visibility: visible; transition: opacity .2s ease .1s; }
 @media (prefers-reduced-motion: reduce) { .island, .panel { transition: none !important; } }
-.panel { display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+/* 328 = OPEN_MAX_H (360, island.ts/panel.rs) - pill height (32). */
+.panel { display: flex; flex-direction: column; gap: 10px; font-size: 13px; max-height: 328px; overflow-y: auto;
+         scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.panel > * { flex-shrink: 0; }
 .row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .dot[data-s="working"] { background: var(--accent); }
