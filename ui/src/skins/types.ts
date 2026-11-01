@@ -1,22 +1,22 @@
-// Contrato de una skin (docs/SPEC.md → Skins → Implementación). Solo tipos: importable desde Node.
+// Skin contract (docs/SPEC.md → Skins → Implementación). Types only, so Node can import it.
 import type { Key } from "../i18n";
 import type { Note, Sound } from "../sound/sfx";
 import type { Skin } from "./index";
 
-/** [mes 1..12, día]. */
+/** [month 1..12, day]. */
 export type MonthDay = [number, number];
 
 export interface SkinDef {
   id: Skin;
-  label: Key; // clave de i18n
-  /** Ventana de Automático, ambos días incluidos; puede cruzar el año (24 dic → 6 ene). */
+  label: Key;
+  /** Auto window, both days included; may wrap the year (Dec 24 → Jan 6). */
   season?: { from: MonthDay; to: MonthDay };
-  /** Vestuario de la pilita: un SVG para su ranura sobre el borne y el tinte de los LEDs encendidos. */
+  /** An SVG for the slot over the mascot's terminal and the tint of the lit LEDs. */
   mascot?: { accessory: string; leds?: string[] };
-  /** Marcado de la capa de ambiente de la isla (detrás del contenido, sin clics). */
+  /** Markup of the island ambience layer (behind the content, click-through). */
   ambience?: string;
-  /** Los que faltan suenan como los clásicos. */
+  /** Missing ones sound like the classic ones. */
   sounds?: Partial<Record<Sound, Note[]>>;
-  /** Solo para lo que necesita JS; recibe únicamente su capa de ambiente. */
+  /** Only for what needs JS; it receives just its own ambience layer. */
   behavior?: { start(layer: HTMLElement): void; stop(): void };
 }

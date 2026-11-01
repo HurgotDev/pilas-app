@@ -1,6 +1,6 @@
 [package]
 name = "pilas-core"
-description = "Modelo de sesiones, máquina de estados y protocolo IPC de Pilas (sin Tauri)"
+description = "Pilas session model, state machine and IPC protocol (no Tauri)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

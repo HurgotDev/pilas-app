@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Herramienta de releases: fragmentos de changelog en .changes/, versión y notas.
+// Release tool: changelog fragments in .changes/, version and notes.
 // Usage: node scripts/release.mjs <prepare|check|notes <version>|version|
 //   latest <version> <signature.sig>|cask <version> <dmg>>
 import { execFileSync, spawnSync } from "node:child_process";
@@ -9,11 +9,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const BUMPS = ["patch", "minor", "major"];
-// "none": el cambio no necesita versión nueva (docs, README, CI).
+// "none": the change needs no new version (docs, README, CI).
 const FRAGMENT_BUMPS = ["none", ...BUMPS];
 const GROUPS = { major: "Breaking changes", minor: "Added", patch: "Fixes and improvements" };
 
-// Devuelve { bump, body } o lanza un Error con el motivo.
 export function parseFragment(text) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
   if (!m) throw new Error("missing frontmatter (--- bump: ... ---)");
@@ -23,7 +22,7 @@ export function parseFragment(text) {
   if (!FRAGMENT_BUMPS.includes(bump)) {
     throw new Error(`invalid bump '${bump}' (use ${FRAGMENT_BUMPS.join(" | ")})`);
   }
-  // El cuerpo se convierte en una sola viñeta.
+  // The body becomes a single bullet.
   const body = m[2].trim().replace(/\s*\n\s*/g, " ");
   if (!body) throw new Error("the body is empty");
   return { bump, body };
@@ -35,14 +34,14 @@ export function nextVersion(current, bumps) {
   let [major, minor, patch] = parts.slice(1).map(Number);
   const top = Math.max(...bumps.map((b) => BUMPS.indexOf(b)));
   if (top < 0) throw new Error("there are no fragments");
-  // Se aplica literalmente aunque major sea 0: major lleva a 1.0.0.
+  // Applied literally even when major is 0: a major bump goes to 1.0.0.
   if (top === 2) [major, minor, patch] = [major + 1, 0, 0];
   else if (top === 1) [minor, patch] = [minor + 1, 0];
   else patch += 1;
   return `${major}.${minor}.${patch}`;
 }
 
-// Versión siguiente según los fragmentos que cuentan; null si todos son "none".
+// null if every fragment is "none".
 export function releaseVersion(current, fragments) {
   const bumps = fragments.map((f) => f.bump).filter((b) => b !== "none");
   return bumps.length ? nextVersion(current, bumps) : null;
@@ -57,14 +56,12 @@ export function renderSection(version, date, fragments) {
   return out;
 }
 
-// Inserta la sección antes de la primera versión existente (o al final).
 export function prependSection(changelog, section) {
   const i = changelog.search(/^## \[/m);
   if (i < 0) return `${changelog.trimEnd()}\n\n${section}`;
   return `${changelog.slice(0, i)}${section}\n${changelog.slice(i)}`;
 }
 
-// Cuerpo de la sección de una versión, sin su título; null si no existe.
 export function extractSection(changelog, version) {
   const lines = changelog.split("\n");
   const start = lines.findIndex((l) => l.startsWith(`## [${version}]`));
@@ -74,7 +71,7 @@ export function extractSection(changelog, version) {
   return lines.slice(start + 1, end).join("\n").trim();
 }
 
-// Cambia la primera aparición de "version": "..." sin reformatear el JSON.
+// Replaces the first "version": "..." without reformatting the JSON.
 export function setJsonVersion(text, version) {
   return text.replace(/"version":\s*"[^"]*"/, `"version": "${version}"`);
 }
@@ -85,8 +82,8 @@ export function setCargoVersion(text, version) {
   return text.replace(re, `$1${version}"`);
 }
 
-// latest.json del updater (formato estático de Tauri). Ambas plataformas
-// apuntan al mismo tarball universal; la firma es el contenido del .sig.
+// Updater latest.json (Tauri static format). Both platforms point at the same
+// universal tarball; the signature is the content of the .sig file.
 export function buildLatest({ version, notes, pubDate, signature, url }) {
   const platform = { signature, url };
   return {
@@ -97,7 +94,7 @@ export function buildLatest({ version, notes, pubDate, signature, url }) {
   };
 }
 
-// Rellena la plantilla del cask. La versión entra en Ruby: se valida antes.
+// The version ends up in Ruby, so it is validated first.
 export function renderCask(template, { version, sha256 }) {
   if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`invalid version: ${version}`);
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error("invalid sha256");

@@ -67,7 +67,7 @@ Referencia: https://code.claude.com/docs/en/hooks. Todos los hooks apuntan a `pi
 | `SessionEnd` | No | Elimina la sesión |
 
 **Permisos** (`hookSpecificOutput.decision`): Permitir `{"behavior":"allow"}` · Denegar
-`{"behavior":"deny","message":"Denegado desde Pilas"}` · Siempre `{"behavior":"allow","updatedPermissions":[…]}`
+`{"behavior":"deny","message":"Denied from Pilas"}` · Siempre `{"behavior":"allow","updatedPermissions":[…]}`
 reenviando las `permission_suggestions` del payload · Responder en la terminal: salida vacía. El código 2 no se
 respeta en `PermissionRequest`.
 

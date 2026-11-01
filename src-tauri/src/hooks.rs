@@ -1,5 +1,5 @@
-//! IO del instalador: lee `~/.claude/settings.json`, copia `pilas-hook` a la carpeta de datos,
-//! hace backup y escribe. La fusión JSON vive en `pilas_core::installer`.
+//! Installer IO: reads `~/.claude/settings.json`, copies `pilas-hook` to the data folder,
+//! backs up and writes. The JSON merge lives in `pilas_core::installer`.
 
 use pilas_core::installer::{self, DiffLine, HookStatus};
 use pilas_core::paths::data_dir;
@@ -21,12 +21,11 @@ impl Action {
         match action {
             "install" => Ok(Self::Install),
             "uninstall" => Ok(Self::Uninstall),
-            otra => Err(format!("acción desconocida: {otra}")),
+            other => Err(format!("unknown action: {other}")),
         }
     }
 }
 
-/// Lo que ve la UI en `hooks_status`.
 #[derive(Debug, Serialize)]
 pub struct HooksInfo {
     /// "ok" | "missing" | "needs_repair" | "invalid_json"
@@ -36,21 +35,21 @@ pub struct HooksInfo {
 
 struct Paths {
     claude_settings: PathBuf,
-    /// `data_dir()/bin/pilas-hook`: donde Claude Code encontrará el hook.
+    /// `data_dir()/bin/pilas-hook`: where Claude Code finds the hook.
     hook_dest: PathBuf,
 }
 
-/// `$PILAS_CLAUDE_SETTINGS` permite probar sin tocar la configuración real (ver docs/HOOKS-DEV.md).
+/// `$PILAS_CLAUDE_SETTINGS` allows testing without touching the real config (see docs/HOOKS-DEV.md).
 fn paths() -> Result<Paths, String> {
     let claude_settings = match std::env::var_os("PILAS_CLAUDE_SETTINGS") {
         Some(p) => PathBuf::from(p),
         None => {
-            let home = std::env::var_os("HOME").ok_or("HOME no definido")?;
+            let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
             PathBuf::from(home).join(".claude/settings.json")
         }
     };
     let hook_dest = data_dir()
-        .ok_or("no se pudo resolver la carpeta de datos")?
+        .ok_or("could not resolve the data folder")?
         .join("bin")
         .join(HOOK_NAME);
     Ok(Paths {
@@ -59,19 +58,19 @@ fn paths() -> Result<Paths, String> {
     })
 }
 
-/// Sin archivo = `{}`. Archivo que no es JSON válido = error (no se escribe nada).
+/// No file means `{}`. A file that is not valid JSON is an error, so nothing gets written.
 fn read_claude_settings(path: &Path) -> Result<Value, String> {
     match fs::read_to_string(path) {
         Ok(text) if text.trim().is_empty() => Ok(json!({})),
         Ok(text) => serde_json::from_str(&text)
-            .map_err(|_| format!("{} no es JSON válido; no se ha escrito nada", path.display())),
+            .map_err(|_| format!("{} is not valid JSON; nothing was written", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
         Err(e) => Err(e.to_string()),
     }
 }
 
 fn compute(action: Action, current: &Value, hook_dest: &Path) -> Result<Value, String> {
-    let dest = hook_dest.to_str().ok_or("la ruta del hook no es UTF-8")?;
+    let dest = hook_dest.to_str().ok_or("the hook path is not UTF-8")?;
     match action {
         Action::Install => installer::install(current, dest),
         Action::Uninstall => installer::uninstall(current, dest),
@@ -79,7 +78,7 @@ fn compute(action: Action, current: &Value, hook_dest: &Path) -> Result<Value, S
     .map_err(|e| e.to_string())
 }
 
-/// Estado actual para la UI. Si no se puede resolver la ruta, "missing" con ruta vacía.
+/// If the path cannot be resolved, "missing" with an empty path.
 pub fn info() -> HooksInfo {
     let Ok(p) = paths() else {
         return HooksInfo {
@@ -91,7 +90,7 @@ pub fn info() -> HooksInfo {
     let status = match read_claude_settings(&p.claude_settings) {
         Err(_) => "invalid_json",
         Ok(current) => match installer::status(&current, p.hook_dest.to_str().unwrap_or_default()) {
-            // Entradas en su sitio pero el binario se ha borrado: Claude Code fallaría en silencio.
+            // Entries in place but the binary was deleted: Claude Code would fail silently.
             HookStatus::Ok if !p.hook_dest.exists() => "needs_repair",
             HookStatus::Ok => "ok",
             HookStatus::Missing => "missing",
@@ -101,7 +100,7 @@ pub fn info() -> HooksInfo {
     HooksInfo { status, settings_path }
 }
 
-/// Diff (pretty JSON antes/después) de lo que haría la acción. No escribe nada.
+/// Pretty JSON before/after diff of what the action would do. Writes nothing.
 pub fn preview(action: Action) -> Result<Vec<DiffLine>, String> {
     let p = paths()?;
     let before = read_claude_settings(&p.claude_settings)?;
@@ -111,7 +110,7 @@ pub fn preview(action: Action) -> Result<Vec<DiffLine>, String> {
     Ok(installer::line_diff(&before, &after))
 }
 
-/// Aplica la acción. Devuelve la ruta del backup si se escribió `settings.json` y ya existía.
+/// Returns the backup path if `settings.json` already existed and was written.
 pub fn apply(action: Action) -> Result<Option<PathBuf>, String> {
     let p = paths()?;
     let current = read_claude_settings(&p.claude_settings)?;
@@ -125,25 +124,24 @@ pub fn apply(action: Action) -> Result<Option<PathBuf>, String> {
         None
     };
     if action == Action::Uninstall {
-        let _ = fs::remove_file(&p.hook_dest); // si ya no está, no pasa nada
+        let _ = fs::remove_file(&p.hook_dest); // already gone is fine
     }
     Ok(backup)
 }
 
-/// `pilas-hook` empaquetado junto al ejecutable de la app (puede no existir).
+/// Next to the app executable; may not exist.
 fn bundled_hook() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    Ok(exe.parent().ok_or("el ejecutable no tiene carpeta")?.join(HOOK_NAME))
+    Ok(exe.parent().ok_or("the executable has no folder")?.join(HOOK_NAME))
 }
 
-/// Decisión pura: re-copiar si Pilas ya está conectada, hay un hook empaquetado
-/// y difiere de la copia (o la copia falta).
+/// Recopy only if Pilas is connected, a bundled hook exists and it differs from
+/// the installed copy (or the copy is missing).
 pub fn needs_refresh(connected: bool, bundled: Option<&[u8]>, installed: Option<&[u8]>) -> bool {
     connected && bundled.is_some() && bundled != installed
 }
 
-/// Al arrancar: si la app trae un hook distinto del copiado, lo recopia.
-/// Nunca toca settings.json y no informa de errores.
+/// Never touches settings.json and reports no errors.
 pub fn refresh_hook() {
     let Ok(p) = paths() else { return };
     let Ok(current) = read_claude_settings(&p.claude_settings) else {
@@ -158,18 +156,18 @@ pub fn refresh_hook() {
     }
 }
 
-/// Copia el binario del hook junto a la app a la carpeta de datos (escritura temporal + rename).
+/// Temp write + rename.
 fn copy_hook(dest: &Path) -> Result<(), String> {
     use std::os::unix::fs::PermissionsExt;
-    // shortcut: en desarrollo copia target/debug/pilas-hook; en release lo empaqueta el workflow de publicación (bundle.macOS.files → MacOS/pilas-hook, universal y firmado ad-hoc)
+    // shortcut: in development this copies target/debug/pilas-hook; in release the publish workflow bundles it (bundle.macOS.files → MacOS/pilas-hook, universal and ad-hoc signed)
     let src = bundled_hook()?;
     if !src.exists() {
         return Err(format!(
-            "no se encuentra {} junto a la app; compila con `cargo build -p pilas-hook`",
+            "{} not found next to the app; build it with `cargo build -p pilas-hook`",
             src.display()
         ));
     }
-    let dir = dest.parent().ok_or("ruta del hook sin carpeta")?;
+    let dir = dest.parent().ok_or("hook path has no folder")?;
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let tmp = dir.join(format!(".{HOOK_NAME}.tmp"));
     fs::copy(&src, &tmp).map_err(|e| e.to_string())?;
@@ -177,9 +175,9 @@ fn copy_hook(dest: &Path) -> Result<(), String> {
     fs::rename(&tmp, dest).map_err(|e| e.to_string())
 }
 
-/// Fecha local `YYYYMMDD-HHMMSS` para los nombres de backup.
+/// Local `YYYYMMDD-HHMMSS` for backup names.
 fn timestamp() -> String {
-    // SAFETY: `time` con puntero nulo y `localtime_r` con búferes válidos del tamaño correcto.
+    // SAFETY: `time` with a null pointer and `localtime_r` with valid, correctly sized buffers.
     let tm = unsafe {
         let now = libc::time(std::ptr::null_mut());
         let mut tm: libc::tm = std::mem::zeroed();
@@ -197,13 +195,13 @@ fn timestamp() -> String {
     )
 }
 
-/// Backup (si ya existía) + escritura atómica conservando los permisos del original.
+/// Backup (if it existed) + atomic write keeping the original's permissions.
 fn write_claude_settings(path: &Path, value: &Value) -> Result<Option<PathBuf>, String> {
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or("nombre de settings.json no válido")?;
-    let dir = path.parent().ok_or("settings.json sin carpeta")?;
+        .ok_or("invalid settings.json name")?;
+    let dir = path.parent().ok_or("settings.json has no folder")?;
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
 
     let backup = if path.exists() {
@@ -229,38 +227,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accion_desconocida_es_error() {
+    fn unknown_action_is_error() {
         assert_eq!(Action::parse("install"), Ok(Action::Install));
         assert_eq!(Action::parse("uninstall"), Ok(Action::Uninstall));
-        assert!(Action::parse("borrar").is_err());
+        assert!(Action::parse("delete").is_err());
     }
 
     #[test]
-    fn refresco_solo_si_conectada_y_distinto() {
-        let nuevo: &[u8] = b"v2";
-        let viejo: &[u8] = b"v1";
+    fn refresh_only_if_connected_and_different() {
+        let new: &[u8] = b"v2";
+        let old: &[u8] = b"v1";
+        assert!(!needs_refresh(false, Some(new), Some(old)), "not connected: leave it");
         assert!(
-            !needs_refresh(false, Some(nuevo), Some(viejo)),
-            "sin conectar no se toca"
+            !needs_refresh(true, None, Some(old)),
+            "no bundled binary: nothing to copy"
         );
-        assert!(
-            !needs_refresh(true, None, Some(viejo)),
-            "sin binario empaquetado no hay nada que copiar"
-        );
-        assert!(!needs_refresh(true, Some(nuevo), Some(nuevo)), "ya está al día");
-        assert!(needs_refresh(true, Some(nuevo), Some(viejo)), "binario distinto");
-        assert!(needs_refresh(true, Some(nuevo), None), "falta la copia");
+        assert!(!needs_refresh(true, Some(new), Some(new)), "already up to date");
+        assert!(needs_refresh(true, Some(new), Some(old)), "different binary");
+        assert!(needs_refresh(true, Some(new), None), "copy missing");
     }
 
     #[test]
-    fn json_invalido_no_se_lee_como_vacio() {
+    fn invalid_json_is_not_read_as_empty() {
         let dir = std::env::temp_dir().join(format!("pilas-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
-        let roto = dir.join("roto.json");
-        fs::write(&roto, "{ no json").unwrap();
-        assert!(read_claude_settings(&roto).is_err());
-        let ausente = dir.join("ausente.json");
-        assert_eq!(read_claude_settings(&ausente), Ok(json!({})));
+        let broken = dir.join("broken.json");
+        fs::write(&broken, "{ no json").unwrap();
+        assert!(read_claude_settings(&broken).is_err());
+        let missing = dir.join("missing.json");
+        assert_eq!(read_claude_settings(&missing), Ok(json!({})));
         let _ = fs::remove_dir_all(&dir);
     }
 }

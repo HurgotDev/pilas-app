@@ -1,5 +1,5 @@
-// Registro de skins: los consumidores piden la activa aquí y la usan sin nombrarla.
-// Sin DOM al importar ni imports de CSS, para poder probarlo con node:test (los CSS los carga main.ts).
+// Skin registry: consumers ask for the active skin here and use it without naming it.
+// No DOM on import and no CSS imports, so node:test can load it (main.ts loads the CSS).
 import type { MonthDay, SkinDef } from "./types.ts";
 import { classic } from "./classic/index.ts";
 import { halloween } from "./halloween/index.ts";
@@ -10,7 +10,7 @@ export type SkinChoice = "auto" | Skin;
 
 export const SKINS = { classic, halloween, christmas } satisfies Record<Skin, SkinDef>;
 
-/** ¿Cae `date` (fecha local) en la temporada? Admite rangos que cruzan el año. */
+/** Ranges may wrap around the new year. */
 export function inSeason(season: { from: MonthDay; to: MonthDay }, date: Date): boolean {
   const key = ([m, d]: MonthDay) => m * 100 + d;
   const today = key([date.getMonth() + 1, date.getDate()]);
@@ -18,7 +18,7 @@ export function inSeason(season: { from: MonthDay; to: MonthDay }, date: Date): 
   return from <= to ? today >= from && today <= to : today >= from || today <= to;
 }
 
-/** `auto` elige la skin cuya temporada contiene la fecha local; si ninguna, `classic`. */
+/** `auto` picks the skin whose season contains the local date, else `classic`. */
 export function resolveSkin(choice: SkinChoice, date: Date): Skin {
   if (choice !== "auto") return choice;
   const def = Object.values(SKINS).find((s: SkinDef) => s.season && inSeason(s.season, date));

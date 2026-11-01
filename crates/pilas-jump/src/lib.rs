@@ -1,5 +1,5 @@
-//! Saltar a la terminal de una sesión. Regla: fallar cerrado. Si no hay coincidencia segura,
-//! solo se trae la app al frente; nunca se enfoca una pestaña equivocada.
+//! Jump to a session's terminal. Fails closed: without a certain match only the app is
+//! brought to the front; a wrong tab is never focused.
 
 use std::process::Command;
 
@@ -7,26 +7,24 @@ use std::process::Command;
 pub struct JumpTarget {
     pub term_program: Option<String>,
     pub tty: Option<String>,
-    /// Proceso de la sesión; sirve para reconocer sesiones en segundo plano.
+    /// Used to recognise background sessions.
     pub pid: Option<u32>,
     pub cwd: Option<String>,
-    /// Id de terminal de Ghostty cacheado en un salto anterior.
+    /// Ghostty terminal id cached from an earlier jump.
     pub cached_terminal_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JumpOutcome {
-    /// Se enfocó la terminal exacta (con su id, para cachearlo).
     Exact { terminal_id: Option<String> },
-    /// Solo se trajo la app al frente.
     AppOnly,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum JumpError {
-    #[error("no se pudo ejecutar osascript: {0}")]
+    #[error("could not run osascript: {0}")]
     Spawn(#[from] std::io::Error),
-    #[error("AppleScript falló: {0}")]
+    #[error("AppleScript failed: {0}")]
     Script(String),
 }
 
@@ -35,7 +33,6 @@ pub trait TerminalJumper {
     fn jump(&self, target: &JumpTarget) -> Result<JumpOutcome, JumpError>;
 }
 
-/// Elige el jumper según `TERM_PROGRAM`.
 pub fn jumper_for(term_program: Option<&str>) -> Box<dyn TerminalJumper> {
     let ghostty = GhosttyJumper;
     if ghostty.can_handle(term_program) {
@@ -56,7 +53,6 @@ fn osascript(script: &str) -> Result<String, JumpError> {
     }
 }
 
-/// Escapa un string para un literal AppleScript entre comillas dobles.
 fn as_literal(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -70,15 +66,15 @@ impl GhosttyJumper {
         Ok(JumpOutcome::AppOnly)
     }
 
-    /// Enfoca la terminal cuya propiedad `property` (fija, de nuestro código) vale `value`.
-    /// Devuelve su id solo si hay exactamente una coincidencia.
+    /// `property` is a fixed name from our code, never user input.
+    /// Returns the id only when exactly one terminal matches.
     fn focus_unique(property: &str, value: &str) -> Result<Option<String>, JumpError> {
         let id = osascript(&unique_script(property, value))?;
         Ok((!id.is_empty()).then_some(id))
     }
 }
 
-/// Script que enfoca la única terminal con `property == value`; si hay 0 o varias, no hace nada.
+/// Does nothing when 0 or several terminals match.
 fn unique_script(property: &str, value: &str) -> String {
     format!(
         "tell application \"Ghostty\"\n\
@@ -101,7 +97,7 @@ impl TerminalJumper for GhosttyJumper {
     }
 
     fn jump(&self, target: &JumpTarget) -> Result<JumpOutcome, JumpError> {
-        // Pasos en orden de fiabilidad; un error en un paso no corta los demás.
+        // Ordered by reliability; an error in one step does not stop the rest.
         let steps = [
             ("id", target.cached_terminal_id.as_deref()),
             ("tty", target.tty.as_deref()),
@@ -118,18 +114,16 @@ impl TerminalJumper for GhosttyJumper {
     }
 }
 
-/// ¿Tiene el foco la terminal de esta sesión? Solo Ghostty se puede comprobar;
-/// cualquier error cuenta como "no enfocada" para avisar al usuario.
+/// Only Ghostty can be checked; any error counts as "not focused" so the user is still alerted.
 pub fn is_focused(target: &JumpTarget) -> bool {
     let Ok(out) = osascript(focused_script()) else {
         return false;
     };
-    // Solo se lanza `claude` si Ghostty está al frente y el tty no bastó.
+    // `claude` is only spawned if Ghostty is frontmost and the tty was not enough.
     is_focused_with(&out, target, agents_json)
 }
 
-/// Decisión pura: `out` es la salida del script de foco y `agents` da el JSON de
-/// `claude agents --json` (solo se llama si hace falta).
+/// `agents` yields `claude agents --json` and is only called when needed.
 fn is_focused_with(out: &str, target: &JumpTarget, agents: impl FnOnce() -> Option<String>) -> bool {
     let Some((tty, title)) = parse_focus(out) else {
         return false;
@@ -145,8 +139,8 @@ fn is_focused_with(out: &str, target: &JumpTarget, agents: impl FnOnce() -> Opti
         .is_some_and(|name| name == strip_glyph(title))
 }
 
-/// Script que devuelve "tty\ntítulo" de la terminal enfocada de Ghostty, o ""
-/// si Ghostty no corre o no está al frente. Nunca lanza Ghostty.
+/// Returns "tty\ntitle" of Ghostty's focused terminal, or "" if Ghostty is not
+/// running or not frontmost. Never launches Ghostty.
 fn focused_script() -> &'static str {
     "if application \"Ghostty\" is running then\n\
        tell application \"Ghostty\"\n\
@@ -159,7 +153,6 @@ fn focused_script() -> &'static str {
      return \"\""
 }
 
-/// Separa la salida del script en (tty, título); None si está vacía.
 fn parse_focus(out: &str) -> Option<(&str, &str)> {
     let out = out.trim_end_matches(['\n', '\r']);
     if out.is_empty() {
@@ -168,8 +161,7 @@ fn parse_focus(out: &str) -> Option<(&str, &str)> {
     Some(out.split_once('\n').unwrap_or((out, "")))
 }
 
-/// Quita el glifo de estado inicial ("◐ Nombre" → "Nombre"); si el título no
-/// tiene esa forma, lo devuelve entero.
+/// "◐ Name" → "Name"; any other title is returned whole.
 fn strip_glyph(title: &str) -> &str {
     let mut chars = title.chars();
     match (chars.next(), chars.next()) {
@@ -178,7 +170,7 @@ fn strip_glyph(title: &str) -> &str {
     }
 }
 
-/// Nombre de la sesión con ese pid, solo si ninguna otra comparte nombre.
+/// Only if no other session shares the name.
 fn unique_name_for_pid(json: &str, pid: u32) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(json).ok()?;
     let entries = v.as_array()?;
@@ -191,7 +183,7 @@ fn unique_name_for_pid(json: &str, pid: u32) -> Option<String> {
     (same.count() == 1).then_some(name)
 }
 
-/// Salida de `claude agents --json` (sin red, ~0.1 s); None ante cualquier fallo.
+/// `claude agents --json` (no network, ~0.1 s).
 fn agents_json() -> Option<String> {
     let home = std::env::var("HOME").unwrap_or_default();
     let bin = [
@@ -207,12 +199,11 @@ fn agents_json() -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-/// La sesión tiene el foco solo si el tty coincide exactamente.
 fn tty_matches(focused: &str, tty: Option<&str>) -> bool {
     tty.is_some_and(|t| !t.is_empty() && t == focused)
 }
 
-/// Cualquier otra terminal: traerla al frente por su nombre de app.
+/// Any other terminal: bring it to the front by app name.
 pub struct GenericJumper;
 
 fn app_name(term_program: Option<&str>) -> Option<&'static str> {
@@ -244,34 +235,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn elige_ghostty() {
+    fn picks_ghostty() {
         assert!(GhosttyJumper.can_handle(Some("ghostty")));
         assert!(!GhosttyJumper.can_handle(Some("iTerm.app")));
         assert!(!GhosttyJumper.can_handle(None));
     }
 
     #[test]
-    fn escapa_literales() {
+    fn escapes_literals() {
         assert_eq!(as_literal(r#"/a "b"\c"#), r#""/a \"b\"\\c""#);
     }
 
     #[test]
-    fn script_exige_coincidencia_unica() {
+    fn script_requires_unique_match() {
         let s = unique_script("tty", "/dev/ttys004");
         assert!(s.contains(r#"whose tty is "/dev/ttys004""#));
         assert!(s.contains("(count of ts) is 1"));
     }
 
     #[test]
-    fn script_foco_comprueba_que_ghostty_corre_antes_de_tell() {
+    fn focus_script_checks_ghostty_runs_before_tell() {
         let s = focused_script();
-        let guard = s.find("is running").expect("falta el guard `is running`");
-        let tell = s.find("tell application").expect("falta el `tell`");
-        assert!(guard < tell, "el guard debe ir antes del `tell`");
+        let guard = s.find("is running").expect("missing the `is running` guard");
+        let tell = s.find("tell application").expect("missing the `tell`");
+        assert!(guard < tell, "the guard must come before `tell`");
     }
 
     #[test]
-    fn script_foco_exige_frontmost_y_terminal_enfocada() {
+    fn focus_script_requires_frontmost_and_focused_terminal() {
         let s = focused_script();
         assert!(s.contains("frontmost"));
         assert!(s.contains("focused terminal of selected tab of front window"));
@@ -279,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn tty_coincide_solo_si_es_igual_y_no_vacio() {
+    fn tty_matches_only_if_equal_and_not_empty() {
         assert!(tty_matches("/dev/ttys007", Some("/dev/ttys007")));
         assert!(!tty_matches("/dev/ttys007", Some("/dev/ttys004")));
         assert!(!tty_matches("", Some("")));
@@ -288,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn parsea_la_salida_del_foco() {
+    fn parses_focus_output() {
         assert_eq!(parse_focus(""), None);
         assert_eq!(
             parse_focus("/dev/ttys000\n◐ Fix open pill\n"),
@@ -298,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn quita_el_glifo_del_titulo() {
+    fn strips_title_glyph() {
         assert_eq!(strip_glyph("◐ Fix open pill"), "Fix open pill");
         assert_eq!(strip_glyph("plain"), "plain");
         assert_eq!(strip_glyph("a b"), "a b");
@@ -312,12 +303,12 @@ mod tests {
         {"pid":9,"id":"e"}]"#;
 
     #[test]
-    fn nombre_unico_por_pid() {
+    fn unique_name_by_pid() {
         let n = |pid| unique_name_for_pid(AGENTS, pid);
         assert_eq!(n(69647).as_deref(), Some("Fix open pill"));
-        assert_eq!(n(7), None); // nombre duplicado
-        assert_eq!(n(9), None); // sin nombre
-        assert_eq!(n(1), None); // pid ausente
+        assert_eq!(n(7), None); // duplicate name
+        assert_eq!(n(9), None); // no name
+        assert_eq!(n(1), None); // missing pid
         assert_eq!(unique_name_for_pid("no json", 7), None);
     }
 
@@ -330,13 +321,13 @@ mod tests {
     }
 
     #[test]
-    fn decide_foco_por_tty_sin_lanzar_claude() {
+    fn focus_by_tty_without_spawning_claude() {
         let t = target(Some("/dev/ttys000"), Some(69647));
-        assert!(is_focused_with("/dev/ttys000\nx", &t, || panic!("no debe lanzarse")));
+        assert!(is_focused_with("/dev/ttys000\nx", &t, || panic!("must not be spawned")));
     }
 
     #[test]
-    fn decide_foco_de_segundo_plano_por_nombre() {
+    fn background_focus_by_name() {
         let t = target(Some("/dev/ttys099"), Some(69647));
         let agents = || Some(AGENTS.to_string());
         assert!(is_focused_with("/dev/ttys000\n◐ Fix open pill", &t, agents));
@@ -346,25 +337,25 @@ mod tests {
     }
 
     #[test]
-    fn decide_sin_foco_si_no_hay_nada_que_comparar() {
-        let vacio = JumpTarget::default();
+    fn no_focus_when_nothing_to_compare() {
+        let empty = JumpTarget::default();
         assert!(!is_focused_with("", &target(Some("/dev/ttys000"), None), || None));
-        assert!(!is_focused_with("/dev/ttys000\nx", &vacio, || None));
+        assert!(!is_focused_with("/dev/ttys000\nx", &empty, || None));
         assert!(!is_focused_with("/dev/ttys000\nx", &target(Some(""), None), || None));
     }
 
-    /// Humo manual: `cargo test -p pilas-jump -- --ignored --nocapture`.
+    /// Manual smoke test: `cargo test -p pilas-jump -- --ignored --nocapture`.
     #[test]
     #[ignore]
-    fn humo_claude_agents_real() {
-        let json = agents_json().expect("claude agents --json falló");
+    fn smoke_real_claude_agents() {
+        let json = agents_json().expect("claude agents --json failed");
         println!("{json}");
         assert!(serde_json::from_str::<serde_json::Value>(&json).is_ok());
     }
 
     #[test]
-    fn nombres_de_apps() {
+    fn app_names() {
         assert_eq!(app_name(Some("iTerm.app")), Some("iTerm"));
-        assert_eq!(app_name(Some("desconocida")), None);
+        assert_eq!(app_name(Some("unknown")), None);
     }
 }

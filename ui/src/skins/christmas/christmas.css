@@ -1,6 +1,6 @@
-/* Skin Navidad: todo bajo :root[data-skin="christmas"]; nunca toca la pilita (docs/SPEC.md → Skins). */
+/* Christmas skin: everything under :root[data-skin="christmas"]; never touches the mascot (docs/SPEC.md → Skins). */
 
-/* Punto en silueta de bola (mismo truco y huella que la calabaza). */
+/* Dot clipped to a bauble (same trick and footprint as the pumpkin). */
 :root[data-skin="christmas"] .dot {
   width: 10px; height: 10px; margin: -1px; border-radius: 0;
   --bauble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect x='3.8' y='0' width='2.4' height='2.2' rx='.4'/%3E%3Ccircle cx='5' cy='6' r='4'/%3E%3C/svg%3E");
@@ -8,18 +8,18 @@
   -webkit-mask-size: contain; mask-size: contain;
   -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
 }
-/* Contador en bola roja con enganche dorado; el padding superior deja el enganche libre. */
+/* Red bauble counter with a gold cap; the top padding leaves room for the cap. */
 :root[data-skin="christmas"] .badge {
   height: 22px; min-width: 22px; padding: 3px 6px 0; box-sizing: border-box; border-radius: 0; color: #fff;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22' preserveAspectRatio='none'%3E%3Crect x='8.5' y='.5' width='5' height='3.5' rx='1' fill='%23E8C15A'/%3E%3Cellipse cx='11' cy='13.2' rx='10.5' ry='8.6' fill='%23D7263D'/%3E%3Cellipse cx='7' cy='9.5' rx='2.6' ry='1.6' fill='%23fff' opacity='.35'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
 }
-/* Ambiente: la capa la monta island.ts detrás de .pill/.panel y sin clics; cada copo es un carril de alto completo que baja su propia altura. */
+/* Each flake is a full-height lane that moves down by its own height. */
 :root[data-skin="christmas"] .island:not([data-size="hidden"]) { box-shadow: inset 0 -8px 10px -8px rgba(215,38,61,.6); }
 :root[data-skin="christmas"] .flake { position: absolute; top: -4px; width: var(--s); height: 100%; opacity: 0;
          background: radial-gradient(circle closest-side, rgba(255,255,255,.75) 55%, transparent) top / var(--s) var(--s) no-repeat;
          animation: snowfall 9s linear infinite; }
 @keyframes snowfall { 0% { opacity: 0; transform: none; } 10%, 85% { opacity: .6; } 100% { opacity: 0; transform: translate(6px, 100%); } }
-/* Muñeco troll: index.ts mueve left (transición lineal) con calc() sobre el ancho libre (la pose mide --sm y no se sale); aquí solo las poses. El viewBox es de 12 unidades: 1 unidad = 1,5 px, así que los trazos y las distancias en unidades escalan solos. */
+/* Snowman: index.ts moves left (linear transition) with calc() over the free width (the pose is --sm wide and never overflows); only poses here. The viewBox is 12 units: 1 unit = 1.5 px, so strokes and distances in units scale on their own. */
 :root[data-skin="christmas"] .snow-track { --sm: 18px; position: absolute; bottom: 2px; left: 0; width: var(--sm); transition: left 0s linear; }
 :root[data-skin="christmas"] .snowman { display: block; width: var(--sm); height: var(--sm); overflow: visible; }
 :root[data-skin="christmas"] .snow-track[data-dir="l"] .snowman { transform: scaleX(-1); }
@@ -28,24 +28,21 @@
 :root[data-skin="christmas"] .arm { fill: none; stroke: #8B5A2B; stroke-width: .6; stroke-linecap: round; transform-box: view-box; transform-origin: 3.6px 6.6px; }
 :root[data-skin="christmas"] .arm-r { transform-origin: 8.4px 6.6px; }
 :root[data-skin="christmas"] .sm-back, :root[data-skin="christmas"] .ball, :root[data-skin="christmas"] .dizzy { display: none; }
-/* walk: pasos lentos y bote suave; run: pasos rápidos, salto mayor e inclinado hacia delante. */
+/* walk: slow steps and a soft bounce; run: fast steps, a bigger hop and a forward lean. */
 :root[data-skin="christmas"] [data-act="walk"] .leg { animation: snowstep .45s ease-in-out infinite alternate; }
 :root[data-skin="christmas"] [data-act="walk"] .sm-body { animation: snowhop .45s ease-in-out infinite alternate; }
 :root[data-skin="christmas"] [data-act="run"] .leg { animation: snowstep .28s ease-in-out infinite alternate; }
 :root[data-skin="christmas"] [data-act="run"] .sm-body { animation: snowdash .28s ease-in-out infinite alternate; }
 :root[data-skin="christmas"] [data-act="walk"] .leg-b, :root[data-skin="christmas"] [data-act="run"] .leg-b { animation-direction: alternate-reverse; }
-/* idle: respira despacio. */
 :root[data-skin="christmas"] [data-act="idle"] .sm-body { animation: snowbreathe 1.6s ease-in-out infinite alternate; }
-/* wave: brazo delantero en alto, agitándose. */
 :root[data-skin="christmas"] [data-act="wave"] .arm-r { animation: snowwave .25s ease-in-out infinite alternate; }
-/* throw: carga el brazo, lanza, y la bola vuela en arco hacia donde mira y se deshace (1,2 s, igual que en snowman.ts). */
+/* throw: 1.2 s, same as in snowman.ts. */
 :root[data-skin="christmas"] [data-act="throw"] .arm-r { animation: snowthrow 1.2s ease-in-out both; }
 :root[data-skin="christmas"] [data-act="throw"] .ball { display: inline; animation: snowball 1.2s linear both; }
-/* moon: de espaldas, meneando el trasero. */
 :root[data-skin="christmas"] [data-act="moon"] .sm-front { display: none; }
 :root[data-skin="christmas"] [data-act="moon"] .sm-back { display: inline; }
 :root[data-skin="christmas"] [data-act="moon"] .sm-body { animation: snowwiggle .18s ease-in-out infinite alternate; }
-/* slip: patina con las patas hacia delante, cae de espaldas (las patas quedan al aire), rebota al chocar, se queda un rato y se levanta. 2 s, igual que en snowman.ts. */
+/* slip: 2 s, same as in snowman.ts. */
 :root[data-skin="christmas"] [data-act="slip"] .sm-body { animation: snowslip 2s ease-in-out both; }
 :root[data-skin="christmas"] [data-act="slip"] .leg { animation: snowkick 2s ease-in-out both; }
 :root[data-skin="christmas"] [data-act="slip"] .dizzy { display: inline; animation: snowdizzy 2s linear both; }
@@ -71,7 +68,7 @@
 @keyframes snowbreathe { to { transform: scale(1.03, 1.05); } }
 @keyframes snowwave { from { transform: rotate(-50deg); } to { transform: rotate(-85deg); } }
 @keyframes snowthrow { 0% { transform: none; } 40% { transform: rotate(-130deg); } 55% { transform: rotate(25deg); } 75%, 100% { transform: none; } }
-/* La bola recorre 34 unidades, unos 51 px en pantalla. */
+/* The ball travels 34 units, about 51 px on screen. */
 @keyframes snowball {
   0%, 50% { opacity: 0; transform: none; }
   55% { opacity: 1; transform: none; }
@@ -83,7 +80,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-skin="christmas"] .flake, :root[data-skin="christmas"] .snow-track { display: none !important; }
 }
-/* Acentos rojo/verde; los colores de estado y Permitir/Denegar no cambian. */
+/* Red/green accents; state colors and Allow/Deny stay unchanged. */
 :root[data-skin="christmas"] { --line: #1f3a28; }
 :root[data-skin="christmas"] .link { color: #FF6B6B; }
 :root[data-skin="christmas"] :focus-visible { outline: 2px solid #4ADE80; outline-offset: 2px; }

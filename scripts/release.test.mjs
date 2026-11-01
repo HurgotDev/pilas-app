@@ -14,12 +14,12 @@ import {
 } from "./release.mjs";
 
 test("parseFragment reads bump (with comment) and body", () => {
-  const f = parseFragment("---\nbump: minor   # patch | minor | major\n---\nAñade algo.\n  Y más.\n");
-  assert.deepEqual(f, { bump: "minor", body: "Añade algo. Y más." });
+  const f = parseFragment("---\nbump: minor   # patch | minor | major\n---\nAdd something.\n  And more.\n");
+  assert.deepEqual(f, { bump: "minor", body: "Add something. And more." });
 });
 
 test("parseFragment rejects invalid fragments", () => {
-  assert.throws(() => parseFragment("Sin frontmatter"), /frontmatter/);
+  assert.throws(() => parseFragment("No frontmatter"), /frontmatter/);
   assert.throws(() => parseFragment("---\nfoo: 1\n---\nx"), /bump:/);
   assert.throws(() => parseFragment("---\nbump: huge\n---\nx"), /invalid bump/);
   assert.throws(() => parseFragment("---\nbump: patch\n---\n  \n"), /is empty/);

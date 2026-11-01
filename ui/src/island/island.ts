@@ -1,4 +1,3 @@
-// Isla mínima funcional (M2/M3): píldora, lista de sesiones y tarjeta de permiso.
 import type { PilitaMascot, PilitaState } from "../mascot/pilita";
 import { configure, play } from "../sound/sfx";
 import * as api from "./api";
@@ -8,15 +7,15 @@ import type { SkinDef } from "../skins/types.ts";
 
 type Size = "hidden" | "pill" | "open";
 
-const OPEN_MAX_H = 360; // tope de la tarjeta abierta (styles.css); igual que en Rust
-const HIDDEN_H = 6; // alturas de la ventana por modo (styles.css)
+const OPEN_MAX_H = 360; // open card cap (styles.css); same as in Rust
+const HIDDEN_H = 6; // window height per mode (styles.css)
 const PILL_H = 32;
-const OPEN_W = 420; // ancho de la ventana abierta; igual que en Rust
+const OPEN_W = 420; // same as in Rust
 
 const STATE_LABEL: Record<api.SessionState, Key> = {
-  en_espera: "state.en_espera",
-  trabajando: "state.trabajando",
-  pendiente: "state.pendiente",
+  idle: "state.idle",
+  working: "state.working",
+  pending: "state.pending",
   error: "state.error",
 };
 
@@ -27,7 +26,7 @@ const DEST: Record<string, Key> = {
   session: "dest.session",
 };
 
-// Frase de last_action según su tipo; el backend solo manda datos.
+// The backend only sends data; the sentence is built here.
 const ACTION: Record<api.ActionKind, Key> = {
   bash: "act.bash",
   edit: "act.edit",
@@ -46,13 +45,12 @@ interface Question {
   options: { label: string; description?: string }[];
 }
 
-// Preguntas de AskUserQuestion; vacío si el payload no trae ninguna.
 function questionsOf(p: api.PendingView): Question[] {
   const list = p.tool_input?.questions;
   return Array.isArray(list) ? (list as Question[]) : [];
 }
 
-// Una línea por regla o directorio que Claude Code guardaría con "Siempre".
+// One line per rule or directory Claude Code would save with "Always".
 function describeSuggestions(list: unknown[]): string[] {
   const lines: string[] = [];
   for (const raw of list) {
@@ -72,7 +70,6 @@ function describeSuggestions(list: unknown[]): string[] {
   return lines;
 }
 
-// "ahora", "hace N min" o "hace N h" desde la última actividad (textos en i18n.ts).
 function ago(ms: number): string {
   const min = Math.floor((Date.now() - ms) / 60_000);
   if (min < 1) return t("ago.now");
@@ -80,37 +77,36 @@ function ago(ms: number): string {
   return t("ago.h", { n: Math.floor(min / 60) });
 }
 
-// Texto de last_action; sin argumento, un comando se muestra como "un comando" (i18n).
 function actionText(a: api.LastAction): string {
   const arg = a.arg ?? (a.kind === "bash" ? t("arg.command") : "");
   return t(ACTION[a.kind], { arg });
 }
 
 export function mountIsland(root: HTMLElement): void {
-  let snap: api.Snapshot = { sessions: [], mascot: "dormida", pending: [] };
+  let snap: api.Snapshot = { sessions: [], mascot: "sleeping", pending: [] };
   let open = false;
-  let peek = false; // con la isla oculta, el cursor encima muestra la píldora
-  let fullUntil = 0; // la pilita se muestra "llena" ~4 s tras terminar una sesión
-  let sent = { mode: "", h: 0 }; // último tamaño de ventana enviado al backend
+  let peek = false; // while hidden, hovering shows the pill
+  let fullUntil = 0; // the mascot shows "full" ~4 s after a session finishes
+  let sent = { mode: "", h: 0 }; // last window size sent to the backend
   let shrinkTimer = 0;
-  let seq = 0; // invalida aplicaciones de tamaño pendientes
-  let pillW = window.innerWidth; // ancho de la píldora = ancho de la ventana fuera del modo abierto
-  // Estado de la tarjeta por request_id: deja de coincidir al llegar otro pendiente, así que no hace falta resetearlo.
-  let confirmAlways: string | null = null; // paso de confirmación de "Siempre"
-  let expanded: string | null = null; // detalle expandido ("ver más")
-  // Progreso de AskUserQuestion: paso actual y elecciones por pregunta; se reinicia si cambia la tarjeta.
+  let seq = 0; // invalidates pending size applications
+  let pillW = window.innerWidth; // outside open mode the window is exactly the pill width
+  // Card state keyed by request_id: it stops matching when another request arrives, so no reset is needed.
+  let confirmAlways: string | null = null; // "Always" confirmation step
+  let expanded: string | null = null;
+  // AskUserQuestion progress; resets when the card changes.
   let qCard: { id: string; step: number; picks: string[][] } | null = null;
-  let openOnPending = true; // ajuste "Abrir la isla al llegar una solicitud"
-  let skinChoice: SkinChoice = "auto"; // ajuste "Disfraz"; la skin efectiva depende de la fecha
+  let openOnPending = true;
+  let skinChoice: SkinChoice = "auto"; // the effective skin depends on the date
 
-  // Una capa de ambiente por skin (applySkin muestra solo la de la activa): detrás del contenido y sin clics.
+  // One ambience layer per skin (applySkin shows only the active one), behind the content and click-through.
   const layers = Object.values(SKINS)
     .filter((k: SkinDef) => k.ambience)
     .map((k: SkinDef) => `<div class="ambience" data-ambience="${k.id}" aria-hidden="true" hidden>${k.ambience}</div>`)
     .join("");
   root.innerHTML = `${layers}
     <div class="pill">
-      <pilas-mascot state="dormida"></pilas-mascot>
+      <pilas-mascot state="sleeping"></pilas-mascot>
       <span class="badge" hidden></span>
     </div>
     <div class="panel"></div>`;
@@ -120,19 +116,19 @@ export function mountIsland(root: HTMLElement): void {
 
   const size = (): Size => (open ? "open" : snap.sessions.length === 0 && !peek ? "hidden" : "pill");
 
-  // Tamaño de la isla en CSS (ancho y alto explícitos para que transicionen).
+  // Explicit width and height so they can transition.
   function applySize(mode: Size, h: number): void {
     root.dataset.size = mode;
     root.style.setProperty("--w", `${mode === "open" ? OPEN_W : pillW}px`);
     root.style.setProperty("--h", `${h}px`);
   }
 
-  // La ventana toma el tamaño de la isla. Al crecer, primero la ventana y en el siguiente frame el CSS
-  // (la isla anima dentro de la ventana ya grande); al encoger, el CSS ya y la ventana tras la transición (~300 ms).
+  // Growing: window first, CSS on the next frame (the island animates inside the already large window).
+  // Shrinking: CSS now, window after the transition (~300 ms).
   function syncWindow(): void {
     clearTimeout(shrinkTimer);
     const mode = size();
-    // Se mide el contenido, no la isla (su alto ahora es fijo).
+    // Measure the content, not the island (its height is fixed now).
     const content = (root.querySelector(".pill") as HTMLElement).offsetHeight + panel.offsetHeight;
     const h = mode === "open" ? Math.min(content, OPEN_MAX_H) : mode === "pill" ? PILL_H : HIDDEN_H;
     const mine = ++seq;
@@ -149,7 +145,6 @@ export function mountIsland(root: HTMLElement): void {
       shrinkTimer = window.setTimeout(() => void send(), 320);
     }
   }
-  // Fuera del modo abierto la ventana mide exactamente lo que la píldora.
   window.addEventListener("resize", () => {
     if (sent.mode === "open") return;
     pillW = window.innerWidth;
@@ -157,12 +152,11 @@ export function mountIsland(root: HTMLElement): void {
   });
 
   function mascotState(): PilitaState {
-    if (snap.mascot === "alerta") return "alerta";
-    if (Date.now() < fullUntil) return "llena";
+    if (snap.mascot === "alert") return "alert";
+    if (Date.now() < fullUntil) return "full";
     return snap.mascot;
   }
 
-  // " · 1 de N" (o "1 of N") cuando hay más de una solicitud pendiente.
   function counterOf(index: number): string {
     return snap.pending.length > 1 ? t("card.counter", { i: index + 1, n: snap.pending.length }) : "";
   }
@@ -225,7 +219,7 @@ export function mountIsland(root: HTMLElement): void {
           <button class="b-always" data-back>${t("btn.back")}</button>
         </div>`;
     }
-    const canAlways = (p.permission_suggestions ?? []).length > 0; // sin reglas sugeridas, Pilas no inventa "Siempre"
+    const canAlways = (p.permission_suggestions ?? []).length > 0; // without suggested rules Pilas never invents "Always"
     return `<div class="card-head">${esc(p.project)} · ${esc(p.tool_name ?? "")}${counter}</div>
       <div class="card-body${expanded === p.request_id ? " expanded" : ""}">${esc(detail)}</div>
       <button class="link" data-expand hidden>${t("btn.more")}</button>
@@ -237,7 +231,7 @@ export function mountIsland(root: HTMLElement): void {
       <button class="link" data-choice="terminal">${t("btn.terminal")}</button>`;
   }
 
-  // Tras pintar, ofrece "ver más" solo si el detalle pasa de 6 líneas, o "ver menos" si ya está expandido.
+  // "More" only when the detail exceeds 6 lines; "less" when already expanded.
   function fitDetail(): void {
     const body = panel.querySelector<HTMLElement>(".card-body");
     const more = panel.querySelector<HTMLElement>("[data-expand]");
@@ -247,14 +241,14 @@ export function mountIsland(root: HTMLElement): void {
     more.textContent = t(isExp ? "btn.less" : "btn.more");
   }
 
-  // Única vía para decidir, compartida por clic y Enter: va por request_id exacto.
+  // The only way to decide, shared by click and Enter: always by exact request_id.
   async function decide(p: api.PendingView, choice: api.PermissionChoice): Promise<void> {
     confirmAlways = null;
     await api.resolvePermission(p.request_id, choice);
-    play(choice === "deny" ? "denegado" : "aprobado");
+    play(choice === "deny" ? "denied" : "approved");
   }
 
-  // Marca una opción: única avanza sola (salvo en la última); múltiple alterna la casilla.
+  // Single choice advances on its own (except on the last step); multi-select toggles.
   function pickQuestion(p: api.PendingView, j: number): void {
     const card = qCardOf(p);
     const qs = questionsOf(p);
@@ -269,7 +263,7 @@ export function mountIsland(root: HTMLElement): void {
     }
   }
 
-  // Respuestas en orden de opciones, con la pregunta como clave, según el contrato de Claude Code.
+  // Answers in option order, keyed by question, per Claude Code's contract.
   async function sendQuestion(p: api.PendingView): Promise<void> {
     const card = qCardOf(p);
     const qs = questionsOf(p);
@@ -279,7 +273,7 @@ export function mountIsland(root: HTMLElement): void {
       answers[q.question] = q.options.map((o) => o.label).filter((l) => card.picks[i].includes(l)).join(", ");
     });
     await api.answerQuestion(p.request_id, answers);
-    play("aprobado");
+    play("approved");
   }
 
   function render(): void {
@@ -315,7 +309,7 @@ export function mountIsland(root: HTMLElement): void {
       expanded = expanded === first.request_id ? null : first.request_id;
       render();
     } else if (el.dataset.choice === "always" && first) {
-      confirmAlways = first.request_id; // "Siempre" no decide: primero muestra las reglas
+      confirmAlways = first.request_id; // "Always" does not decide: it shows the rules first
       render();
     } else if (el.dataset.choice && first) {
       await decide(first, el.dataset.choice as api.PermissionChoice);
@@ -339,51 +333,51 @@ export function mountIsland(root: HTMLElement): void {
     }
   });
 
-  // La píldora alterna abrir/cerrar; la pilita solo abre, para no chocar con los 3 clics del mareo.
+  // The pill toggles; the mascot only opens, so it does not clash with the 3-click dizzy reaction.
   root.querySelector(".pill")!.addEventListener("click", (e) => {
     if ((e.target as Element).closest("pilas-mascot")) return;
     open = !open;
     render();
   });
   mascot.addEventListener("pilita-click", (e) => {
-    // En alerta no hay reacciones ni sonido; el 3er clic (mareo) suena distinto al toque.
-    if (mascot.state !== "alerta") play((e as CustomEvent).detail?.reaction === "mareo" ? "mareo" : "toque");
+    // No reactions or sound in alert; the 3rd click (dizzy) sounds different from a tap.
+    if (mascot.state !== "alert") play((e as CustomEvent).detail?.reaction === "dizzy" ? "dizzy" : "tap");
     if (!open) { open = true; render(); }
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { open = false; render(); }
-    // Enter decide sobre la tarjeta de permiso; con un botón enfocado, su activación nativa ya actúa.
+    // Enter decides on the permission card; a focused button's native activation already acts.
     const first = snap.pending[0];
     if (e.key !== "Enter" || !open || !first || first.kind !== "permission" || e.repeat) return;
     if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.target instanceof HTMLButtonElement) return;
     e.preventDefault();
     void decide(first, confirmAlways === first.request_id ? "always" : "allow");
   });
-  // Clic fuera de la isla (la ventana pierde el foco) → contraer a píldora.
+  // Click outside (window loses focus) → collapse to pill.
   window.addEventListener("blur", () => {
     if (open) { open = false; render(); }
   });
-  // Con la isla oculta, el cursor sobre su franja la muestra un momento (aviso nativo: la app no está activa).
+  // While hidden, hovering its strip shows the pill (native notice: the app is not active).
   api.onHover((inside) => {
-    if (inside) mascot.react("saludo");
+    if (inside) mascot.react("wave");
     if (inside && size() === "hidden") { peek = true; render(); }
     else if (!inside && peek) { peek = false; render(); }
   });
 
   api.onSnapshot((s) => { snap = s; if (s.pending.length === 0 && s.sessions.length === 0) open = false; render(); });
-  // Recordatorio una sola vez por request_id, a los 60 s, solo si sigue pendiente.
+  // One reminder per request_id, after 60 s, only if still pending.
   const reminded = new Set<string>();
   api.onPending((requestId) => {
     if (openOnPending) open = true;
-    play("alerta"); render();
+    play("alert"); render();
     if (reminded.has(requestId)) return;
     reminded.add(requestId);
     setTimeout(() => {
-      if (snap.pending.some((p) => p.request_id === requestId)) play("recordatorio");
+      if (snap.pending.some((p) => p.request_id === requestId)) play("reminder");
     }, 60_000);
   });
-  api.onFinished(() => { fullUntil = Date.now() + 4000; play("listo"); render(); setTimeout(render, 4100); });
-  // Skin efectiva en la pilita, en la raíz (su CSS en ui/src/skins), en los sonidos y en su capa de ambiente.
+  api.onFinished(() => { fullUntil = Date.now() + 4000; play("done"); render(); setTimeout(render, 4100); });
+  // Applies the effective skin to the mascot, the root (CSS in ui/src/skins), sounds and ambience layer.
   let current: SkinDef | null = null;
   function applySkin(): void {
     const skin = resolveSkin(skinChoice, new Date());
@@ -396,7 +390,6 @@ export function mountIsland(root: HTMLElement): void {
     const layer = root.querySelector<HTMLElement>(`[data-ambience="${skin}"]`);
     if (layer && !matchMedia("(prefers-reduced-motion: reduce)").matches) current.behavior?.start(layer);
   }
-  // Ajustes: idioma, sonido, disfraz y apertura al llegar un pendiente; se aplican al arrancar y en cada cambio.
   function applySettings(s: api.Settings): void {
     setLang(s.lang);
     configure({ enabled: s.sound_enabled, volume: s.volume });
@@ -408,9 +401,9 @@ export function mountIsland(root: HTMLElement): void {
   api.getSettings().then(applySettings);
   api.onSettings(applySettings);
   api.getSnapshot().then((s) => { snap = s; render(); });
-  // Refresca los "hace N min" mientras la lista está abierta.
+  // Keeps "N min ago" fresh while the list is open.
   setInterval(() => { if (open) render(); }, 30_000);
-  // Cada hora, para que en Automático la temporada empiece y acabe sin reiniciar.
+  // Hourly, so in Auto the season starts and ends without a restart.
   setInterval(applySkin, 3_600_000);
   render();
 }

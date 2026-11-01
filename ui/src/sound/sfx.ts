@@ -1,22 +1,22 @@
-// Sonidos 8-bit sintetizados con Web Audio: sin archivos (docs/SPEC.md → Sonidos).
+// 8-bit sounds synthesized with Web Audio, no files (docs/SPEC.md → Sonidos).
 import { SKINS, type Skin } from "../skins/index.ts";
 import type { SkinDef } from "../skins/types.ts";
 
-export type Sound = "alerta" | "recordatorio" | "listo" | "aprobado" | "denegado" | "toque" | "mareo";
+export type Sound = "alert" | "reminder" | "done" | "approved" | "denied" | "tap" | "dizzy";
 
 export interface Note { f: number; t: number; d: number; type?: OscillatorType; to?: number }
 
 const CLASSIC: Record<Sound, Note[]> = {
-  alerta:       [{ f: 880, t: 0, d: 0.11 }, { f: 1320, t: 0.12, d: 0.13 }],
-  recordatorio: [{ f: 660, t: 0, d: 0.09, type: "triangle" }, { f: 990, t: 0.1, d: 0.1, type: "triangle" }],
-  listo:        [{ f: 784, t: 0, d: 0.1 }, { f: 988, t: 0.1, d: 0.1 }, { f: 1319, t: 0.2, d: 0.16 }],
-  aprobado:     [{ f: 1568, t: 0, d: 0.07 }],
-  denegado:     [{ f: 330, t: 0, d: 0.12, to: 196 }],
-  toque:        [{ f: 520, t: 0, d: 0.15, type: "triangle", to: 260 }],
-  mareo:        [{ f: 1320, t: 0, d: 0.08, type: "triangle" }, { f: 990, t: 0.09, d: 0.08, type: "triangle" }, { f: 1245, t: 0.18, d: 0.08, type: "triangle" }, { f: 932, t: 0.27, d: 0.08, type: "triangle" }, { f: 1175, t: 0.36, d: 0.08, type: "triangle" }, { f: 880, t: 0.45, d: 0.08, type: "triangle" }, { f: 1109, t: 0.54, d: 0.08, type: "triangle" }, { f: 831, t: 0.63, d: 0.1, type: "triangle" }],
+  alert:    [{ f: 880, t: 0, d: 0.11 }, { f: 1320, t: 0.12, d: 0.13 }],
+  reminder: [{ f: 660, t: 0, d: 0.09, type: "triangle" }, { f: 990, t: 0.1, d: 0.1, type: "triangle" }],
+  done:     [{ f: 784, t: 0, d: 0.1 }, { f: 988, t: 0.1, d: 0.1 }, { f: 1319, t: 0.2, d: 0.16 }],
+  approved: [{ f: 1568, t: 0, d: 0.07 }],
+  denied:   [{ f: 330, t: 0, d: 0.12, to: 196 }],
+  tap:      [{ f: 520, t: 0, d: 0.15, type: "triangle", to: 260 }],
+  dizzy:    [{ f: 1320, t: 0, d: 0.08, type: "triangle" }, { f: 990, t: 0.09, d: 0.08, type: "triangle" }, { f: 1245, t: 0.18, d: 0.08, type: "triangle" }, { f: 932, t: 0.27, d: 0.08, type: "triangle" }, { f: 1175, t: 0.36, d: 0.08, type: "triangle" }, { f: 880, t: 0.45, d: 0.08, type: "triangle" }, { f: 1109, t: 0.54, d: 0.08, type: "triangle" }, { f: 831, t: 0.63, d: 0.1, type: "triangle" }],
 };
 
-/** Notas de un sonido con una skin: las que la skin no redefine son las clásicas. */
+/** Sounds a skin does not override fall back to the classic ones. */
 export function notesFor(def: SkinDef, name: Sound): Note[] {
   return def.sounds?.[name] ?? CLASSIC[name];
 }
@@ -42,7 +42,7 @@ export function play(name: Sound): void {
     osc.type = n.type ?? "square";
     osc.frequency.setValueAtTime(n.f, now + n.t);
     if (n.to) osc.frequency.exponentialRampToValueAtTime(n.to, now + n.t + n.d);
-    const peak = 0.12 * volume; // la onda cuadrada es fuerte: volumen base bajo
+    const peak = 0.12 * volume; // square waves are loud, so the base volume is low
     gain.gain.setValueAtTime(0, now + n.t);
     gain.gain.linearRampToValueAtTime(peak, now + n.t + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + n.t + n.d);

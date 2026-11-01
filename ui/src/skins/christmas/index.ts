@@ -1,22 +1,22 @@
-// Skin Navidad: gorro de Papá Noel, LEDs rojo/verde, nieve y muñeco troll (CSS en christmas.css).
+// Christmas skin: Santa hat, red/green LEDs, snow and a cheeky snowman (CSS in christmas.css).
 import type { SkinDef } from "../types.ts";
 import { nextAction, type Action } from "./snowman.ts";
 
-// Copos: left, --s (tamaño), duración y retraso; el retraso negativo ya los deja cayendo al cargar.
+// Flakes: left, --s (size), duration and delay; a negative delay has them already falling on load.
 const FLAKES: [number, number, number, number][] = [
   [4, 3, 8, -1], [11, 4, 11, -4], [18, 5, 9, -7], [25, 3, 13, -10], [32, 4, 10, -2], [39, 5, 12, -5], [46, 3, 8, -8],
   [53, 4, 14, -11], [60, 5, 9, -3], [67, 3, 11, -6], [74, 4, 10, -9], [81, 5, 13, -12], [88, 3, 8, -4.5], [95, 4, 12, -7.5],
 ];
 
-// Muñeco de nieve: un único setTimeout encadenado; la pose la pinta el CSS según data-act y data-dir.
+// Snowman: a single chained setTimeout; CSS paints the pose from data-act and data-dir.
 let timer = 0, x = Math.random(), prev: Action | undefined;
 function step(track: HTMLElement): void {
   const { action, to, ms } = nextAction(Math.random, x, prev);
   if (to !== x) track.dataset.dir = to < x ? "l" : "r";
   track.dataset.act = action;
-  // Solo walk/run cambian left, así que la transición solo se nota al moverse.
+  // Only walk/run change left, so the transition only shows while moving.
   track.style.transitionDuration = `${ms}ms`;
-  // Fracción del ancho libre (sin la pose), así la pose nunca se sale por ningún borde.
+  // Fraction of the free width (minus the pose), so the pose never overflows an edge.
   track.style.left = `calc(${to} * (100% - var(--sm)))`;
   x = to; prev = action;
   timer = window.setTimeout(() => step(track), ms);
@@ -27,13 +27,13 @@ export const christmas: SkinDef = {
   label: "set.skin.christmas",
   season: { from: [12, 1], to: [12, 26] },
   mascot: {
-    // Gorro de Papá Noel sobre el borne; cabe en la misma caja que el sombrero de bruja (y 1..38).
+    // Santa hat over the terminal; fits the same box as the witch hat (y 1..38).
     accessory: `
       <path d="M50 28 Q52 6 74 4 Q92 3 100 18 L95 21 Q88 12 82 13 Q88 20 90 28 Z" fill="#D7263D"/>
       <path d="M74 4 Q92 3 100 18 L97 19.5 Q90 9 76 8 Z" fill="#A81B30"/>
       <rect x="46" y="24" width="48" height="12" rx="6" fill="#F4F4F8"/>
       <circle cx="99" cy="19" r="5.5" fill="#F4F4F8"/>`,
-    // Luces alternas: LEDs 0 y 2 rojos, 1 y 3 verdes.
+    // Alternating lights: LEDs 0 and 2 red, 1 and 3 green.
     leds: ["#FF4D5E", "#5CFF8A"],
   },
   ambience: `
@@ -61,16 +61,16 @@ export const christmas: SkinDef = {
       <path class="dizzy" d="M-5 4.9L-4.5 6L-3.4 6.5L-4.5 7L-5 8.1L-5.5 7L-6.6 6.5L-5.5 6Z" fill="#FFD23F"/>
       <circle class="ball" cx="10.6" cy="5.6" r=".9" fill="#fff"/>
     </svg></div>`,
-  // Cascabeles en los mismos cuatro; el resto suena como los clásicos.
+  // Jingle bells for the same four; the rest sound like the classic ones.
   sounds: {
-    // "jin-gle-bells": tres Mi agudos seguidos (0.27 s)
-    alerta: [{ f: 1319, t: 0, d: 0.07 }, { f: 1319, t: 0.09, d: 0.07 }, { f: 1319, t: 0.18, d: 0.09 }],
-    // remate del estribillo Mi-Sol-Do-Re-Mi (0.40 s)
-    listo:  [{ f: 1319, t: 0, d: 0.07 }, { f: 1568, t: 0.08, d: 0.07 }, { f: 1047, t: 0.16, d: 0.07 }, { f: 1175, t: 0.24, d: 0.07 }, { f: 1319, t: 0.32, d: 0.08 }],
-    // cascabel: dos golpes agudos (0.16 s)
-    toque:  [{ f: 1568, t: 0, d: 0.06, type: "triangle" }, { f: 2093, t: 0.07, d: 0.09, type: "triangle" }],
-    // trineo: cascabeles agudos que alternan y bajan (0.73 s)
-    mareo:  [{ f: 2637, t: 0, d: 0.08, type: "triangle" }, { f: 2093, t: 0.09, d: 0.08, type: "triangle" }, { f: 2349, t: 0.18, d: 0.08, type: "triangle" }, { f: 1976, t: 0.27, d: 0.08, type: "triangle" }, { f: 2093, t: 0.36, d: 0.08, type: "triangle" }, { f: 1760, t: 0.45, d: 0.08, type: "triangle" }, { f: 1976, t: 0.54, d: 0.08, type: "triangle" }, { f: 1568, t: 0.63, d: 0.1, type: "triangle" }],
+    // "jin-gle-bells": three high Es in a row (0.27 s)
+    alert: [{ f: 1319, t: 0, d: 0.07 }, { f: 1319, t: 0.09, d: 0.07 }, { f: 1319, t: 0.18, d: 0.09 }],
+    // chorus ending E-G-C-D-E (0.40 s)
+    done:  [{ f: 1319, t: 0, d: 0.07 }, { f: 1568, t: 0.08, d: 0.07 }, { f: 1047, t: 0.16, d: 0.07 }, { f: 1175, t: 0.24, d: 0.07 }, { f: 1319, t: 0.32, d: 0.08 }],
+    // bell: two high hits (0.16 s)
+    tap:  [{ f: 1568, t: 0, d: 0.06, type: "triangle" }, { f: 2093, t: 0.07, d: 0.09, type: "triangle" }],
+    // sleigh: high bells alternating and falling (0.73 s)
+    dizzy:  [{ f: 2637, t: 0, d: 0.08, type: "triangle" }, { f: 2093, t: 0.09, d: 0.08, type: "triangle" }, { f: 2349, t: 0.18, d: 0.08, type: "triangle" }, { f: 1976, t: 0.27, d: 0.08, type: "triangle" }, { f: 2093, t: 0.36, d: 0.08, type: "triangle" }, { f: 1760, t: 0.45, d: 0.08, type: "triangle" }, { f: 1976, t: 0.54, d: 0.08, type: "triangle" }, { f: 1568, t: 0.63, d: 0.1, type: "triangle" }],
   },
   behavior: {
     start(layer) {

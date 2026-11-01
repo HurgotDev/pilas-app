@@ -1,9 +1,9 @@
-//! Sesiones de Claude Code y su máquina de estados (docs/SPEC.md, "Sesiones y estados").
+//! Claude Code sessions and their state machine (docs/SPEC.md, "Sesiones y estados").
 //!
-//!   SessionStart → EnEspera ─UserPromptSubmit→ Trabajando ─permiso/pregunta→ Pendiente
-//!   Pendiente ─respondes→ Trabajando ─Stop→ EnEspera (+ evento Finished: la pilita se llena)
-//!   Trabajando ─StopFailure→ Error ─UserPromptSubmit→ Trabajando
-//!   SessionEnd en cualquier estado → la sesión se elimina
+//!   SessionStart → Idle ─UserPromptSubmit→ Working ─permission/question→ Pending
+//!   Pending ─answered→ Working ─Stop→ Idle (+ Finished event: the mascot fills up)
+//!   Working ─StopFailure→ Error ─UserPromptSubmit→ Working
+//!   SessionEnd in any state → the session is removed
 
 use crate::protocol::{self, HookMessage};
 use serde::Serialize;
@@ -14,39 +14,35 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionState {
-    EnEspera,
-    Trabajando,
-    Pendiente,
+    Idle,
+    Working,
+    Pending,
     Error,
 }
 
-/// Estado agregado que muestra la pilita.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MascotState {
-    Dormida,
-    Cargando,
-    Alerta,
+    Sleeping,
+    Working,
+    Alert,
 }
-// "Llena" es transitoria: la UI la muestra ~4 s al recibir `StoreEvent::Finished`.
+// "full" is transient: the UI shows it for ~4 s on `StoreEvent::Finished`.
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Session {
     pub session_id: String,
     pub agent: String,
     pub cwd: String,
-    /// Última carpeta del `cwd`.
     pub project: String,
     pub tty: Option<String>,
     pub pid: Option<u32>,
     pub term_program: Option<String>,
     pub state: SessionState,
-    /// Qué hace la última herramienta; la UI lo traduce.
     pub last_action: Option<LastAction>,
-    /// Solicitudes bloqueantes abiertas (la app gestiona la cola y la baja al resolver).
+    /// Open blocking requests; the app owns the queue and decrements this on resolve.
     pub pending: u32,
     pub last_assistant_message: Option<String>,
-    /// Milisegundos desde UNIX_EPOCH del último evento.
     pub updated_ms: u64,
 }
 
@@ -54,7 +50,7 @@ pub struct Session {
 pub enum StoreEvent {
     Updated(String),
     Removed(String),
-    /// Una sesión terminó su turno (Trabajando → EnEspera por `Stop`).
+    /// A session finished its turn (Working → Idle on `Stop`).
     Finished(String),
 }
 
@@ -74,11 +70,11 @@ fn project_of(cwd: &str) -> String {
     cwd.trim_end_matches('/').rsplit('/').next().unwrap_or(cwd).to_string()
 }
 
-/// Última acción de una sesión: datos puros, el texto lo pone la UI.
+/// Pure data; the UI renders the text.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LastAction {
     pub kind: ActionKind,
-    /// Comando (Bash), ruta corta (archivos) o nombre de la herramienta (Other).
+    /// Command (Bash), short path (files) or tool name (Other).
     pub arg: Option<String>,
 }
 
@@ -95,7 +91,6 @@ pub enum ActionKind {
     Other,
 }
 
-/// Qué hace una herramienta, para la lista de sesiones.
 pub fn describe_tool(payload: &Value) -> Option<LastAction> {
     let tool = protocol::tool_name(payload)?;
     let input = payload.get("tool_input");
@@ -131,7 +126,6 @@ impl SessionStore {
         self.sessions.get_mut(id)
     }
 
-    /// Sesiones ordenadas: pendientes primero, luego por actividad reciente.
     pub fn list(&self) -> Vec<&Session> {
         let mut v: Vec<_> = self.sessions.values().collect();
         v.sort_by(|a, b| {
@@ -144,12 +138,12 @@ impl SessionStore {
 
     pub fn mascot_state(&self) -> MascotState {
         let s = self.sessions.values();
-        if s.clone().any(|x| x.pending > 0 || x.state == SessionState::Pendiente) {
-            MascotState::Alerta
-        } else if s.clone().any(|x| x.state == SessionState::Trabajando) {
-            MascotState::Cargando
+        if s.clone().any(|x| x.pending > 0 || x.state == SessionState::Pending) {
+            MascotState::Alert
+        } else if s.clone().any(|x| x.state == SessionState::Working) {
+            MascotState::Working
         } else {
-            MascotState::Dormida
+            MascotState::Sleeping
         }
     }
 
@@ -157,7 +151,7 @@ impl SessionStore {
         self.sessions.remove(id)
     }
 
-    /// Quita las sesiones cuyo `pid` ya no existe (sin `SessionEnd`). Sin `pid` se quedan.
+    /// Drops sessions whose `pid` is gone without a `SessionEnd`; sessions without a `pid` stay.
     pub fn prune(&mut self, alive: impl Fn(u32) -> bool) -> Vec<StoreEvent> {
         let mut out = vec![];
         self.sessions.retain(|id, s| {
@@ -170,18 +164,16 @@ impl SessionStore {
         out
     }
 
-    /// Marca una solicitud bloqueante como resuelta (o abandonada).
     pub fn resolve_pending(&mut self, id: &str) -> Option<StoreEvent> {
         let s = self.sessions.get_mut(id)?;
         s.pending = s.pending.saturating_sub(1);
-        if s.pending == 0 && s.state == SessionState::Pendiente {
-            s.state = SessionState::Trabajando;
+        if s.pending == 0 && s.state == SessionState::Pending {
+            s.state = SessionState::Working;
         }
         s.updated_ms = now_ms();
         Some(StoreEvent::Updated(id.to_string()))
     }
 
-    /// Aplica un mensaje del hook y devuelve qué cambió.
     pub fn apply(&mut self, msg: &HookMessage) -> Vec<StoreEvent> {
         if protocol::is_ignored(&msg.event, &msg.payload) {
             return vec![];
@@ -206,7 +198,7 @@ impl SessionStore {
             tty: None,
             pid: None,
             term_program: None,
-            state: SessionState::EnEspera,
+            state: SessionState::Idle,
             last_action: None,
             pending: 0,
             last_assistant_message: None,
@@ -229,29 +221,29 @@ impl SessionStore {
 
         let mut out = vec![StoreEvent::Updated(id.clone())];
         match msg.event.as_str() {
-            "SessionStart" => s.state = SessionState::EnEspera,
-            "UserPromptSubmit" => s.state = SessionState::Trabajando,
+            "SessionStart" => s.state = SessionState::Idle,
+            "UserPromptSubmit" => s.state = SessionState::Working,
             "PreToolUse" => {
                 s.last_action = describe_tool(&msg.payload);
                 if msg.blocking {
                     s.pending += 1;
-                    s.state = SessionState::Pendiente;
-                } else if s.state != SessionState::Pendiente {
-                    s.state = SessionState::Trabajando;
+                    s.state = SessionState::Pending;
+                } else if s.state != SessionState::Pending {
+                    s.state = SessionState::Working;
                 }
             }
             "PermissionRequest" => {
                 s.pending += 1;
-                s.state = SessionState::Pendiente;
+                s.state = SessionState::Pending;
             }
             "PostToolUse" | "PostToolUseFailure" => {
                 if s.pending == 0 {
-                    s.state = SessionState::Trabajando;
+                    s.state = SessionState::Working;
                 }
             }
             "Stop" => {
-                let was_working = s.state != SessionState::EnEspera;
-                s.state = SessionState::EnEspera;
+                let was_working = s.state != SessionState::Idle;
+                s.state = SessionState::Idle;
                 s.pending = 0;
                 s.last_assistant_message = msg
                     .payload
@@ -294,25 +286,25 @@ mod tests {
     }
 
     #[test]
-    fn ciclo_completo() {
+    fn full_cycle() {
         let mut st = SessionStore::default();
         st.apply(&msg("SessionStart", json!({})));
         assert_eq!(st.get("s1").unwrap().project, "pilas-app");
-        assert_eq!(st.mascot_state(), MascotState::Dormida);
+        assert_eq!(st.mascot_state(), MascotState::Sleeping);
 
         st.apply(&msg("UserPromptSubmit", json!({})));
-        assert_eq!(st.mascot_state(), MascotState::Cargando);
+        assert_eq!(st.mascot_state(), MascotState::Working);
 
         st.apply(&msg("PermissionRequest", json!({ "tool_name": "Bash" })));
-        assert_eq!(st.get("s1").unwrap().state, SessionState::Pendiente);
-        assert_eq!(st.mascot_state(), MascotState::Alerta);
+        assert_eq!(st.get("s1").unwrap().state, SessionState::Pending);
+        assert_eq!(st.mascot_state(), MascotState::Alert);
 
         st.resolve_pending("s1");
-        assert_eq!(st.get("s1").unwrap().state, SessionState::Trabajando);
+        assert_eq!(st.get("s1").unwrap().state, SessionState::Working);
 
-        let ev = st.apply(&msg("Stop", json!({ "last_assistant_message": "Listo" })));
+        let ev = st.apply(&msg("Stop", json!({ "last_assistant_message": "Done" })));
         assert!(ev.contains(&StoreEvent::Finished("s1".into())));
-        assert_eq!(st.get("s1").unwrap().last_assistant_message.as_deref(), Some("Listo"));
+        assert_eq!(st.get("s1").unwrap().last_assistant_message.as_deref(), Some("Done"));
 
         let ev = st.apply(&msg("SessionEnd", json!({})));
         assert_eq!(ev, vec![StoreEvent::Removed("s1".into())]);
@@ -320,7 +312,20 @@ mod tests {
     }
 
     #[test]
-    fn pregunta_no_se_duplica() {
+    fn states_serialize_to_ui_contract() {
+        let mascot = [MascotState::Sleeping, MascotState::Working, MascotState::Alert];
+        assert_eq!(json!(mascot), json!(["sleeping", "working", "alert"]));
+        let session = [
+            SessionState::Idle,
+            SessionState::Working,
+            SessionState::Pending,
+            SessionState::Error,
+        ];
+        assert_eq!(json!(session), json!(["idle", "working", "pending", "error"]));
+    }
+
+    #[test]
+    fn question_is_not_duplicated() {
         let mut st = SessionStore::default();
         st.apply(&msg(
             "PreToolUse",
@@ -331,15 +336,15 @@ mod tests {
     }
 
     #[test]
-    fn prune_quita_solo_pids_muertos() {
+    fn prune_removes_only_dead_pids() {
         let mut st = SessionStore::default();
-        st.apply(&msg("SessionStart", json!({}))); // s1, pid 1 (muerto)
-        let mut vivo = msg("SessionStart", json!({ "session_id": "s2" }));
-        vivo.pid = Some(2);
-        st.apply(&vivo);
-        let mut sin_pid = msg("SessionStart", json!({ "session_id": "s3" }));
-        sin_pid.pid = None;
-        st.apply(&sin_pid);
+        st.apply(&msg("SessionStart", json!({}))); // s1, pid 1 (dead)
+        let mut alive_msg = msg("SessionStart", json!({ "session_id": "s2" }));
+        alive_msg.pid = Some(2);
+        st.apply(&alive_msg);
+        let mut no_pid = msg("SessionStart", json!({ "session_id": "s3" }));
+        no_pid.pid = None;
+        st.apply(&no_pid);
 
         let ev = st.prune(|pid| pid == 2);
         assert_eq!(ev, vec![StoreEvent::Removed("s1".into())]);
@@ -349,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn describe_herramientas() {
+    fn describe_tools() {
         let p = json!({ "tool_name": "Edit", "tool_input": { "file_path": "/a/b/src/app.ts" } });
         let a = describe_tool(&p).unwrap();
         assert_eq!((a.kind, a.arg.as_deref()), (ActionKind::Edit, Some("src/app.ts")));
@@ -359,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn describe_mapea_cada_tipo() {
+    fn describe_maps_each_kind() {
         let kind = |tool: &str| describe_tool(&json!({ "tool_name": tool, "tool_input": {} })).unwrap();
         assert_eq!(kind("Write").kind, ActionKind::Write);
         assert_eq!(kind("Read").kind, ActionKind::Read);

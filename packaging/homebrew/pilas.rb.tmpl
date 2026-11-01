@@ -1,5 +1,5 @@
-# Plantilla del cask de Homebrew. La rellena `node scripts/release.mjs cask`
-# en el workflow de release y el resultado se publica en HurgotDev/homebrew-tap.
+# Homebrew cask template. `node scripts/release.mjs cask` fills it in the
+# release workflow and the result is published to HurgotDev/homebrew-tap.
 cask "pilas" do
   version "@VERSION@"
   sha256 "@SHA256@"
@@ -9,14 +9,14 @@ cask "pilas" do
   desc "Notch mascot that tells you when Claude Code needs you"
   homepage "https://github.com/HurgotDev/pilas-app"
 
-  # Pilas se actualiza sola (tauri-plugin-updater): Homebrew no debe pisarla.
+  # Pilas updates itself (tauri-plugin-updater): Homebrew must not overwrite it.
   auto_updates true
   depends_on macos: ">= :ventura"
 
   app "Pilas.app"
 
-  # La app no está firmada con Apple ni notarizada: quitamos la marca de
-  # cuarentena para que macOS no bloquee el primer arranque.
+  # The app is neither Apple-signed nor notarized: drop the quarantine flag
+  # so macOS does not block the first launch.
   postflight do
     system_command "/usr/bin/xattr",
                    args: ["-dr", "com.apple.quarantine", "#{appdir}/Pilas.app"]

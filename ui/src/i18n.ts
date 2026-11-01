@@ -1,10 +1,9 @@
-// Textos de la interfaz: inglés por defecto y español. Sin dependencias.
 export type Lang = "en" | "es";
 
 const en = {
-  "state.en_espera": "Idle",
-  "state.trabajando": "Working",
-  "state.pendiente": "Pending",
+  "state.idle": "Idle",
+  "state.working": "Working",
+  "state.pending": "Pending",
   "state.error": "Error",
   "dest.localSettings": "project (local)",
   "dest.projectSettings": "project",
@@ -93,9 +92,9 @@ const en = {
 };
 
 const es: Record<keyof typeof en, string> = {
-  "state.en_espera": "En espera",
-  "state.trabajando": "Trabajando",
-  "state.pendiente": "Pendiente",
+  "state.idle": "En espera",
+  "state.working": "Trabajando",
+  "state.pending": "Pendiente",
   "state.error": "Error",
   "dest.localSettings": "proyecto (local)",
   "dest.projectSettings": "proyecto",
@@ -187,18 +186,18 @@ export type Key = keyof typeof en;
 
 const dict = { en, es };
 
-/** Idioma del sistema: `es*` → español, el resto → inglés. */
+/** `es*` → Spanish, anything else → English. */
 const systemLang: Lang = navigator.language.startsWith("es") ? "es" : "en";
-/** Idioma activo; `let` para que los importadores vean el cambio de `setLang`. */
+/** `let` so importers see the change made by `setLang`. */
 export let lang: Lang = systemLang;
 
-/** Fija el idioma de Ajustes; `null` vuelve al del sistema. */
+/** `null` goes back to the system language. */
 export function setLang(l: Lang | null): void {
   lang = l ?? systemLang;
   document.documentElement.lang = lang;
 }
 
-/** Traduce `key` y reemplaza `{name}` por `vars.name`. */
+/** Replaces `{name}` with `vars.name`. */
 export function t(key: Key, vars: Record<string, string | number> = {}): string {
   return dict[lang][key].replace(/\{(\w+)\}/g, (m, k: string) => String(vars[k] ?? m));
 }

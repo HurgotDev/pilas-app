@@ -1,4 +1,4 @@
-// Skin Halloween: sombrero de bruja, LEDs calabaza, murciélago, telaraña y fantasmas (CSS en halloween.css).
+// Halloween skin: witch hat, pumpkin LEDs, bat, cobweb and ghosts (CSS in halloween.css).
 import type { SkinDef } from "../types.ts";
 
 export const halloween: SkinDef = {
@@ -6,7 +6,7 @@ export const halloween: SkinDef = {
   label: "set.skin.halloween",
   season: { from: [10, 15], to: [11, 2] },
   mascot: {
-    // Sombrero de bruja sobre el borne; todo dentro del viewBox (y >= 0) para no recortarse en la píldora.
+    // Witch hat over the terminal; all inside the viewBox (y >= 0) so the pill does not clip it.
     accessory: `
       <ellipse cx="70" cy="30" rx="36" ry="8" fill="#2A1A4A"/>
       <path d="M48 29 L58 12 Q64 3 80 1 Q72 7 76 13 L92 29 Z" fill="#3B2566"/>
@@ -27,15 +27,15 @@ export const halloween: SkinDef = {
     </svg>
     <svg class="ghost" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>
     <svg class="ghost g2" viewBox="0 0 12 14"><path d="M1 13 V6 Q1 1 6 1 Q11 1 11 6 V13 L9.3 11.6 L7.6 13 L6 11.6 L4.4 13 L2.7 11.6 Z" fill="#fff"/><circle cx="4.4" cy="6" r="1" fill="#000"/><circle cx="7.6" cy="6" r="1" fill="#000"/></svg>`,
-  // Solo redefine estos cuatro; el resto suena como los clásicos.
+  // Only these four are overridden; the rest sound like the classic ones.
   sounds: {
-    // tritono descendente y vuelta: inquietante pero urgente (0.28 s)
-    alerta: [{ f: 988, t: 0, d: 0.09 }, { f: 698, t: 0.1, d: 0.09 }, { f: 988, t: 0.2, d: 0.08 }],
-    // arpegio menor ascendente, cadencia "bruja" (0.37 s)
-    listo:  [{ f: 523, t: 0, d: 0.09 }, { f: 622, t: 0.09, d: 0.09 }, { f: 784, t: 0.18, d: 0.09 }, { f: 1047, t: 0.27, d: 0.1 }],
-    // "buuu" fantasmal: deslizamiento descendente (0.17 s)
-    toque:  [{ f: 400, t: 0, d: 0.17, type: "triangle", to: 150 }],
-    // murciélagos: chillidos agudos alternando subida/bajada, en descenso (0.73 s)
-    mareo:  [{ f: 2800, t: 0, d: 0.08, type: "triangle", to: 3400 }, { f: 2400, t: 0.09, d: 0.08, type: "triangle", to: 1900 }, { f: 2600, t: 0.18, d: 0.08, type: "triangle", to: 3100 }, { f: 2200, t: 0.27, d: 0.08, type: "triangle", to: 1700 }, { f: 2400, t: 0.36, d: 0.08, type: "triangle", to: 2800 }, { f: 2000, t: 0.45, d: 0.08, type: "triangle", to: 1600 }, { f: 2200, t: 0.54, d: 0.08, type: "triangle", to: 2500 }, { f: 1800, t: 0.63, d: 0.1, type: "triangle", to: 1400 }],
+    // falling tritone and back: eerie but urgent (0.28 s)
+    alert: [{ f: 988, t: 0, d: 0.09 }, { f: 698, t: 0.1, d: 0.09 }, { f: 988, t: 0.2, d: 0.08 }],
+    // rising minor arpeggio, "witchy" cadence (0.37 s)
+    done:  [{ f: 523, t: 0, d: 0.09 }, { f: 622, t: 0.09, d: 0.09 }, { f: 784, t: 0.18, d: 0.09 }, { f: 1047, t: 0.27, d: 0.1 }],
+    // ghostly "boo": falling slide (0.17 s)
+    tap:  [{ f: 400, t: 0, d: 0.17, type: "triangle", to: 150 }],
+    // bats: high squeaks alternating up/down, descending (0.73 s)
+    dizzy:  [{ f: 2800, t: 0, d: 0.08, type: "triangle", to: 3400 }, { f: 2400, t: 0.09, d: 0.08, type: "triangle", to: 1900 }, { f: 2600, t: 0.18, d: 0.08, type: "triangle", to: 3100 }, { f: 2200, t: 0.27, d: 0.08, type: "triangle", to: 1700 }, { f: 2400, t: 0.36, d: 0.08, type: "triangle", to: 2800 }, { f: 2000, t: 0.45, d: 0.08, type: "triangle", to: 1600 }, { f: 2200, t: 0.54, d: 0.08, type: "triangle", to: 2500 }, { f: 1800, t: 0.63, d: 0.1, type: "triangle", to: 1400 }],
   },
 };

@@ -1,32 +1,31 @@
-//! Construye la salida JSON que `pilas-hook` imprime en stdout para Claude Code.
-//! Referencia: https://code.claude.com/docs/en/hooks (PermissionRequest y PreToolUse).
+//! JSON that `pilas-hook` prints to stdout for Claude Code.
+//! Reference: https://code.claude.com/docs/en/hooks (PermissionRequest and PreToolUse).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
-/// Lo que el usuario eligió en la tarjeta de permiso.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionChoice {
     Allow,
     Deny,
-    /// Permitir y guardar las `permission_suggestions` que Claude Code propuso.
+    /// Allow and save the `permission_suggestions` Claude Code proposed.
     Always,
-    /// Devolver el control al diálogo nativo de la terminal.
+    /// Hand control back to the terminal's native dialog.
     Terminal,
 }
 
-/// Lo lee Claude, no el usuario: siempre en inglés.
+/// Read by Claude, not the user, so it is never translated.
 pub const DENY_MESSAGE: &str = "Denied from Pilas";
 
-/// Salida para un evento `PermissionRequest`. `None` = sin salida (diálogo nativo).
+/// `None` means no output, so the native dialog shows.
 pub fn permission_output(choice: &PermissionChoice, payload: &Value) -> Option<Value> {
     let decision = match choice {
         PermissionChoice::Allow => json!({ "behavior": "allow" }),
         PermissionChoice::Deny => json!({ "behavior": "deny", "message": DENY_MESSAGE }),
         PermissionChoice::Always => {
-            // Solo reenviamos lo que Claude Code sugirió: nunca inventamos reglas.
+            // Only forward what Claude Code suggested: never invent rules.
             let suggestions = payload
                 .get("permission_suggestions")
                 .cloned()
@@ -40,11 +39,10 @@ pub fn permission_output(choice: &PermissionChoice, payload: &Value) -> Option<V
     }))
 }
 
-/// Respuestas a `AskUserQuestion`: texto de la pregunta → etiqueta(s) elegida(s), separadas por coma.
+/// `AskUserQuestion` answers: question text → chosen label(s), comma-separated.
 pub type Answers = BTreeMap<String, String>;
 
-/// Salida para `PreToolUse` de `AskUserQuestion` con las respuestas del usuario.
-/// Conserva el `tool_input` original y le añade `answers`.
+/// Keeps the original `tool_input` and adds `answers` to it.
 pub fn question_output(payload: &Value, answers: &Answers) -> Option<Value> {
     let mut input = payload.get("tool_input")?.clone();
     input.as_object_mut()?.insert("answers".into(), json!(answers));
@@ -57,7 +55,7 @@ pub fn question_output(payload: &Value, answers: &Answers) -> Option<Value> {
     }))
 }
 
-/// "Responder en la terminal" para una pregunta: `ask` hace aparecer el selector nativo.
+/// `ask` brings up the native picker in the terminal.
 pub fn question_to_terminal() -> Value {
     json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": "ask" } })
 }
@@ -67,7 +65,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn permitir_y_denegar() {
+    fn allow_and_deny() {
         let p = json!({});
         assert_eq!(
             permission_output(&PermissionChoice::Allow, &p).unwrap()["hookSpecificOutput"]["decision"]["behavior"],
@@ -80,7 +78,7 @@ mod tests {
     }
 
     #[test]
-    fn siempre_reenvia_sugerencias() {
+    fn always_forwards_suggestions() {
         let sugg = json!([{ "type": "addRules", "rules": [{ "toolName": "Bash", "ruleContent": "npm test" }],
                             "behavior": "allow", "destination": "localSettings" }]);
         let p = json!({ "permission_suggestions": sugg });
@@ -89,14 +87,14 @@ mod tests {
     }
 
     #[test]
-    fn respuestas_de_preguntas() {
-        let p = json!({ "tool_name": "AskUserQuestion", "tool_input": { "questions": [{ "question": "¿Formato?" }] } });
+    fn question_answers() {
+        let p = json!({ "tool_name": "AskUserQuestion", "tool_input": { "questions": [{ "question": "Format?" }] } });
         let mut a = Answers::new();
-        a.insert("¿Formato?".into(), "Resumen".into());
+        a.insert("Format?".into(), "Summary".into());
         let out = question_output(&p, &a).unwrap();
         let input = &out["hookSpecificOutput"]["updatedInput"];
         assert_eq!(out["hookSpecificOutput"]["permissionDecision"], "allow");
-        assert_eq!(input["answers"]["¿Formato?"], "Resumen");
-        assert_eq!(input["questions"][0]["question"], "¿Formato?");
+        assert_eq!(input["answers"]["Format?"], "Summary");
+        assert_eq!(input["questions"][0]["question"], "Format?");
     }
 }

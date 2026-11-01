@@ -1,4 +1,4 @@
-//! Ajustes de Pilas (`data_dir()/settings.json`) y el LaunchAgent de "Iniciar con el sistema".
+//! Pilas settings (`data_dir()/settings.json`) and the launch-at-login LaunchAgent.
 
 use crate::panel::ScreenChoice;
 use pilas_core::paths::data_dir;
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// Disfraz de la pilita. Un valor desconocido (p. ej. de una versión más nueva) cuenta como `Auto`.
+/// An unknown value (e.g. from a newer version) counts as `Auto`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Skin {
@@ -18,7 +18,7 @@ pub enum Skin {
     Auto,
 }
 
-/// Mismo contrato que `ui/src/island/api.ts` (snake_case, como el resto de la app).
+/// Same contract as `ui/src/island/api.ts`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -27,12 +27,11 @@ pub struct Settings {
     pub volume: f64,
     pub open_on_pending: bool,
     pub launch_at_login: bool,
-    /// `None` = idioma del sistema.
+    /// `None` means the system language.
     pub lang: Option<String>,
     pub onboarded: bool,
-    /// Busca actualizaciones al arrancar y cada 24 h (ver `updates.rs`).
     pub check_updates: bool,
-    /// Disfraz de temporada; `Auto` cambia según la fecha local (ver `ui/src/skins/index.ts`).
+    /// `Auto` follows the local date (see `ui/src/skins/index.ts`).
     pub skin: Skin,
 }
 
@@ -55,10 +54,10 @@ impl Default for Settings {
 fn settings_file() -> Result<PathBuf, String> {
     data_dir()
         .map(|d| d.join("settings.json"))
-        .ok_or_else(|| "no se pudo resolver la carpeta de datos".to_string())
+        .ok_or_else(|| "could not resolve the data folder".to_string())
 }
 
-/// Lee los ajustes; si no existen o no son válidos, devuelve los de por defecto.
+/// Missing or invalid settings fall back to the defaults.
 pub fn load() -> Settings {
     settings_file()
         .ok()
@@ -67,10 +66,10 @@ pub fn load() -> Settings {
         .unwrap_or_default()
 }
 
-/// Guarda los ajustes con escritura atómica (temporal + rename).
+/// Atomic write (temp file + rename).
 pub fn save(settings: &Settings) -> Result<(), String> {
     let path = settings_file()?;
-    let dir = path.parent().ok_or("ruta de ajustes sin carpeta")?;
+    let dir = path.parent().ok_or("settings path has no folder")?;
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let text = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
     let tmp = path.with_extension("json.tmp");
@@ -80,7 +79,7 @@ pub fn save(settings: &Settings) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 fn launch_agent_path() -> Result<PathBuf, String> {
-    let home = std::env::var_os("HOME").ok_or("HOME no definido")?;
+    let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
     Ok(PathBuf::from(home).join("Library/LaunchAgents/dev.pilas.app.plist"))
 }
 
@@ -98,25 +97,24 @@ fn plist_xml(exe: &str) -> String {
     )
 }
 
-/// ¿Corre desde un .app empaquetado? En `tauri dev` el binario vive en target/.
+/// In `tauri dev` the binary lives in target/, not in a .app.
 pub fn in_app_bundle() -> bool {
     std::env::current_exe()
         .map(|e| e.to_string_lossy().contains(".app/Contents/MacOS/"))
         .unwrap_or(false)
 }
 
-/// Escribe o quita `~/Library/LaunchAgents/dev.pilas.app.plist` según `enabled`.
 #[cfg(target_os = "macos")]
 pub fn sync_launch_agent(enabled: bool) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let exe = exe.to_string_lossy();
-    // En desarrollo el binario no vive en un .app: no tocamos el LaunchAgent del usuario.
+    // In development, leave the user's LaunchAgent alone.
     if !in_app_bundle() {
         return Ok(());
     }
     let plist = launch_agent_path()?;
     if enabled {
-        let dir = plist.parent().ok_or("ruta de LaunchAgent sin carpeta")?;
+        let dir = plist.parent().ok_or("LaunchAgent path has no folder")?;
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         fs::write(&plist, plist_xml(&exe)).map_err(|e| e.to_string())
     } else {
@@ -139,7 +137,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn screen_choice_tiene_la_forma_del_contrato() {
+    fn screen_choice_matches_contract() {
         assert_eq!(serde_json::to_value(ScreenChoice::Main).unwrap(), json!("main"));
         assert_eq!(serde_json::to_value(ScreenChoice::Notch).unwrap(), json!("notch"));
         let named = ScreenChoice::Named("Studio".into());
@@ -147,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn campos_que_faltan_toman_el_valor_por_defecto() {
+    fn missing_fields_take_defaults() {
         let s: Settings = serde_json::from_str(r#"{"volume":0.2}"#).unwrap();
         assert_eq!(s.volume, 0.2);
         assert!(s.sound_enabled);
@@ -157,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn skin_sin_valor_o_desconocido_es_auto_sin_perder_ajustes() {
+    fn missing_or_unknown_skin_is_auto_without_losing_settings() {
         let s: Settings = serde_json::from_str(r#"{"volume":0.2}"#).unwrap();
         assert_eq!(s.skin, Skin::Auto);
         let s: Settings = serde_json::from_str(r#"{"skin":"pirate","volume":0.2,"lang":"es"}"#).unwrap();
@@ -167,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn skin_ida_y_vuelta_en_snake_case() {
+    fn skin_round_trips_in_snake_case() {
         for (skin, text) in [
             (Skin::Auto, "auto"),
             (Skin::Classic, "classic"),
@@ -180,18 +178,18 @@ mod tests {
     }
 
     #[test]
-    fn ids_de_la_ui_coinciden_con_el_enum() {
-        // Lista compartida con el registro de skins de la UI (ui/src/skins/index.ts).
+    fn ui_ids_match_enum() {
+        // Shared with the UI skin registry (ui/src/skins/index.ts).
         let ids: Vec<String> = serde_json::from_str(include_str!("../../ui/src/skins/ids.json")).unwrap();
         let mut seen = Vec::new();
         for id in &ids {
             let skin: Skin = serde_json::from_value(json!(id)).unwrap();
-            assert_ne!(skin, Skin::Auto, "{id} no es una variante de Skin");
+            assert_ne!(skin, Skin::Auto, "{id} is not a Skin variant");
             assert_eq!(serde_json::to_value(skin).unwrap(), json!(id));
-            assert!(!seen.contains(&skin), "{id} repetido");
+            assert!(!seen.contains(&skin), "{id} repeated");
             seen.push(skin);
         }
-        // Match exhaustivo: una variante nueva no compila hasta contarla aquí.
+        // Exhaustive match: a new variant does not compile until it is counted here.
         let non_auto = |s: Skin| match s {
             Skin::Classic | Skin::Halloween | Skin::Christmas => 1,
             Skin::Auto => 0,

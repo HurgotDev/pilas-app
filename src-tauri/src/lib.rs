@@ -1,9 +1,3 @@
-//! App Pilas (Tauri 2). Responsabilidades de este crate:
-//! - servidor del socket local (ver `server`), que alimenta el `SessionStore` de pilas-core,
-//! - cola FIFO de solicitudes bloqueantes y entrega de decisiones al hook,
-//! - comandos para la WebView y eventos hacia ella,
-//! - (M1) comportamiento de la ventana como panel del notch.
-
 mod hooks;
 mod panel;
 mod server;
@@ -22,10 +16,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
-/// Qué le llega al hilo de una conexión que espera decisión.
 pub(crate) enum Outcome {
     Reply(AppReply),
-    /// El hook se desconectó (p. ej. el usuario respondió en la terminal).
+    /// The hook disconnected (e.g. the user answered in the terminal).
     HookGone,
 }
 
@@ -40,15 +33,15 @@ pub(crate) struct PendingRequest {
 pub(crate) struct Inner {
     pub store: SessionStore,
     pub pending: HashMap<String, PendingRequest>,
-    /// Ids de solicitud en orden de llegada.
+    /// Request ids in arrival order.
     pub queue: VecDeque<String>,
     pub screen: panel::ScreenChoice,
     pub mode: panel::IslandMode,
     pub open_height: Option<f64>,
-    /// Sesión → id de terminal de Ghostty, guardado tras un salto exacto.
-    // shortcut: las entradas de sesiones terminadas no se borran, son pocos bytes; limpiar si crece
+    /// Session → Ghostty terminal id, saved after an exact jump.
+    // shortcut: entries of ended sessions are never removed (a few bytes each); clean up if it grows
     pub terminal_ids: HashMap<String, String>,
-    /// Última versión nueva encontrada (`None` = al día o sin comprobar).
+    /// `None` means up to date or not checked yet.
     pub update: Option<updates::UpdateInfo>,
 }
 
@@ -112,7 +105,6 @@ pub(crate) fn emit_snapshot(app: &AppHandle) {
     let _ = app.emit("pilas://snapshot", snap);
 }
 
-/// Saca una solicitud de la cola y le entrega la respuesta a su conexión.
 fn deliver(
     app: &AppHandle,
     state: &AppState,
@@ -121,7 +113,7 @@ fn deliver(
 ) -> Result<(), String> {
     {
         let mut inner = state.0.lock().unwrap();
-        let req = inner.pending.remove(request_id).ok_or("la solicitud ya no existe")?;
+        let req = inner.pending.remove(request_id).ok_or("the request no longer exists")?;
         inner.queue.retain(|r| r != request_id);
         let stdout = build(&req);
         let _ = req.tx.send(Outcome::Reply(AppReply::new(request_id, stdout)));
@@ -148,7 +140,7 @@ fn resolve_permission(
     })
 }
 
-/// `answers = None` → responder en la terminal.
+/// `answers = None` → answer in the terminal.
 #[tauri::command]
 fn answer_question(
     app: AppHandle,
@@ -162,7 +154,7 @@ fn answer_question(
     })
 }
 
-/// La UI avisa del modo visible (y de la altura de la tarjeta abierta) para dimensionar la ventana.
+/// The UI reports its visible mode (and open card height) so the window can be sized.
 #[tauri::command]
 fn set_island_mode(app: AppHandle, state: State<'_, AppState>, mode: panel::IslandMode, open_height: Option<f64>) {
     {
@@ -173,7 +165,6 @@ fn set_island_mode(app: AppHandle, state: State<'_, AppState>, mode: panel::Isla
     apply_layout(&app);
 }
 
-/// Recoloca la isla con la pantalla, el modo y la altura guardados.
 fn apply_layout(app: &AppHandle) {
     let (screen, mode, open_height) = {
         let state = app.state::<AppState>();
@@ -187,7 +178,7 @@ fn apply_layout(app: &AppHandle) {
 fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     let target = {
         let inner = state.0.lock().unwrap();
-        let s = inner.store.get(&session_id).ok_or("sesión desconocida")?;
+        let s = inner.store.get(&session_id).ok_or("unknown session")?;
         pilas_jump::JumpTarget {
             term_program: s.term_program.clone(),
             tty: s.tty.clone(),
@@ -213,13 +204,13 @@ fn jump_to_session(state: State<'_, AppState>, session_id: String) -> Result<(),
     Ok(())
 }
 
-/// El proceso sigue existiendo (señal 0; EPERM también cuenta: existe, sin permiso).
+/// Signal 0; EPERM also counts: the process exists but is not ours.
 fn pid_alive(pid: u32) -> bool {
     let Ok(pid) = i32::try_from(pid) else { return false };
     unsafe { libc::kill(pid, 0) == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM) }
 }
 
-/// Cada 30 s quita las sesiones cuyo proceso ya no existe (sin SessionEnd).
+/// Sessions can die without a SessionEnd, so prune them every 30 s.
 fn spawn_prune(app: AppHandle) {
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(30));
@@ -235,7 +226,7 @@ fn spawn_prune(app: AppHandle) {
                     _ => None,
                 })
                 .collect();
-            // Las solicitudes de esas sesiones ya no tienen a quién responder.
+            // Requests from those sessions have nobody left to answer.
             let gone: Vec<String> = inner
                 .pending
                 .iter()
@@ -251,7 +242,7 @@ fn spawn_prune(app: AppHandle) {
             !removed.is_empty()
         };
         if changed {
-            emit_snapshot(&app); // después de soltar el lock: emit_snapshot lo toma
+            emit_snapshot(&app); // after releasing the lock: emit_snapshot takes it
         }
     });
 }
@@ -261,7 +252,6 @@ fn get_settings() -> settings::Settings {
     settings::load()
 }
 
-/// Persiste, recoloca la isla, sincroniza el LaunchAgent y avisa a todas las ventanas.
 #[tauri::command]
 fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::Settings) -> Result<(), String> {
     settings::save(&settings)?;
@@ -272,7 +262,7 @@ fn set_settings(app: AppHandle, state: State<'_, AppState>, settings: settings::
     Ok(())
 }
 
-/// Async a propósito: un comando síncrono corre en el hilo principal y bloquearía `screen_names`.
+/// Async on purpose: a sync command runs on the main thread and would deadlock `screen_names`.
 #[tauri::command]
 async fn list_screens(app: AppHandle) -> Vec<String> {
     panel::screen_names(&app)
@@ -288,7 +278,7 @@ fn preview_hooks(action: String) -> Result<Vec<pilas_core::installer::DiffLine>,
     hooks::preview(hooks::Action::parse(&action)?)
 }
 
-/// Devuelve la ruta del backup si se escribió `settings.json` y ya existía.
+/// Returns the backup path if `settings.json` already existed and was written.
 #[tauri::command]
 fn apply_hooks(action: String) -> Result<Option<String>, String> {
     let backup = hooks::apply(hooks::Action::parse(&action)?)?;
@@ -300,7 +290,6 @@ fn open_settings(app: AppHandle) -> Result<(), String> {
     open_settings_window(&app).map_err(|e| e.to_string())
 }
 
-/// Muestra la ventana de ajustes, o la crea si no existe.
 fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
     if app.get_webview_window("settings").is_some() {
         panel::bring_to_front(app, "settings");
@@ -317,19 +306,18 @@ fn open_settings_window(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Lado en píxeles del icono de la barra de menú (18 pt a 2x).
+/// Menu bar icon side in pixels (18 pt at 2x).
 const TRAY_SIZE: usize = 36;
-/// Margen en píxeles entre la mascota y el borde del icono.
 const TRAY_MARGIN: f64 = 1.0;
-/// Submuestras por eje para el antialias (4x4 da 17 niveles de cobertura).
+/// Antialias subsamples per axis (4x4 gives 17 coverage levels).
 const TRAY_SUB: usize = 4;
-/// Ojos un 20 % mayores que en el SVG: a 18 pt los agujeros se perderían.
+/// Eyes 20 % larger than in the SVG: at 18 pt the holes would disappear.
 const EYE_SCALE: f64 = 1.2;
-/// Caja de la silueta en unidades del viewBox (144x156) de `ui/src/mascot/pilita.ts`:
-/// x0, y0, x1, y1 (sin contar el brazo, que no cabe en el icono).
+/// Silhouette box in viewBox units (144x156) of `ui/src/mascot/pilita.ts`:
+/// x0, y0, x1, y1 (without the arm, which does not fit in the icon).
 const PILITA_BOX: (f64, f64, f64, f64) = (22.0, 18.0, 118.0, 151.0);
 
-/// Escala y desplazamiento (s, ox, oy) con los que px = ox + u * s, py = oy + v * s.
+/// (s, ox, oy) such that px = ox + u * s, py = oy + v * s.
 fn tray_map() -> (f64, f64, f64) {
     let (x0, y0, x1, y1) = PILITA_BOX;
     let size = TRAY_SIZE as f64;
@@ -339,9 +327,8 @@ fn tray_map() -> (f64, f64, f64) {
     (s, ox, oy)
 }
 
-/// ¿Cae el punto (u, v) del viewBox dentro de la pilita, fuera de los ojos?
 fn pilita_contains(u: f64, v: f64) -> bool {
-    // Rectángulo redondeado (x0, y0, x1, y1, radio), igual que el `rect` del SVG.
+    // Rounded rect (x0, y0, x1, y1, radius), same as the SVG `rect`.
     let in_rect = |(x0, y0, x1, y1, r): (f64, f64, f64, f64, f64)| {
         let dx = ((u - (x0 + x1) / 2.0).abs() - ((x1 - x0) / 2.0 - r)).max(0.0);
         let dy = ((v - (y0 + y1) / 2.0).abs() - ((y1 - y0) / 2.0 - r)).max(0.0);
@@ -354,7 +341,6 @@ fn pilita_contains(u: f64, v: f64) -> bool {
     (body || feet) && !eye(52.0) && !eye(88.0)
 }
 
-/// Alfa de cada píxel del icono: cobertura de la silueta con supermuestreo.
 fn tray_alpha() -> Vec<u8> {
     let (s, ox, oy) = tray_map();
     let n = (TRAY_SUB * TRAY_SUB) as u32;
@@ -375,18 +361,17 @@ fn tray_alpha() -> Vec<u8> {
     alpha
 }
 
-/// Icono de plantilla de la pilita: macOS usa solo el alfa, así que el color da igual.
+/// Template icon: macOS only uses the alpha, so the color does not matter.
 fn tray_icon() -> Image<'static> {
     let rgba: Vec<u8> = tray_alpha().into_iter().flat_map(|a| [0, 0, 0, a]).collect();
     Image::new_owned(rgba, TRAY_SIZE as u32, TRAY_SIZE as u32)
 }
 
-/// Icono de la barra de menú: abrir ajustes o salir.
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
-    // shortcut: etiquetas en inglés porque el backend no tiene i18n; traducir cuando haya más textos nativos
+    // shortcut: English-only labels because the backend has no i18n; translate when more native text appears
     let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit Pilas", true, None::<&str>)?;
-    // "Update to X…" se inserta arriba en updates::publish cuando hay versión nueva.
+    // updates::publish inserts "Update to X…" at the top when a new version exists.
     let update_item = MenuItem::with_id(app, "update", "Update…", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
     app.manage(updates::UpdateMenu {
@@ -414,7 +399,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory); // sin ícono en el Dock
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory); // no Dock icon
 
             let settings = settings::load();
             app.state::<AppState>().0.lock().unwrap().screen = settings.screen.clone();
@@ -429,11 +414,11 @@ pub fn run() {
             server::start(app.handle().clone())?;
             spawn_prune(app.handle().clone());
             setup_tray(app.handle())?;
-            // Recopia el hook si la app trae una versión nueva (no toca settings.json).
+            // Recopy the hook if the app ships a new one (settings.json is not touched).
             std::thread::spawn(hooks::refresh_hook);
             updates::spawn_checks(app.handle().clone());
 
-            // Oferta de reparación al arrancar: primera vez, o hooks que no están bien.
+            // Offer repair on launch: first run, or hooks not in order.
             if !settings.onboarded || hooks::info().status != "ok" {
                 let _ = open_settings_window(app.handle());
             }
@@ -457,7 +442,7 @@ pub fn run() {
             updates::install_update
         ])
         .run(tauri::generate_context!())
-        .expect("error al iniciar Pilas");
+        .expect("error while starting Pilas");
 }
 
 #[cfg(test)]
@@ -471,22 +456,17 @@ mod tests {
         assert_eq!(rgba.len(), 36 * 36 * 4);
         assert_eq!(icon.width(), 36);
         assert_eq!(icon.height(), 36);
-        // Índice del píxel que contiene el punto (u, v) del viewBox de la mascota.
         let pixel = |u: f64, v: f64| {
             let (s, ox, oy) = tray_map();
             let (px, py) = ((ox + u * s) as usize, (oy + v * s) as usize);
             (py * TRAY_SIZE + px) * 4
         };
-        assert_eq!(rgba[3], 0, "la esquina superior izquierda debe ser transparente");
-        assert_eq!(
-            rgba[rgba.len() - 1],
-            0,
-            "la esquina inferior derecha debe ser transparente"
-        );
-        assert_eq!(rgba[pixel(70.0, 120.0) + 3], 255, "el cuerpo debe ser opaco");
-        assert_eq!(rgba[pixel(70.0, 25.0) + 3], 255, "el remate debe ser opaco");
-        assert_eq!(rgba[pixel(52.0, 144.0) + 3], 255, "los pies deben ser opacos");
-        assert_eq!(rgba[pixel(52.0, 72.0) + 3], 0, "el ojo izquierdo debe ser un agujero");
-        assert_eq!(rgba[pixel(88.0, 72.0) + 3], 0, "el ojo derecho debe ser un agujero");
+        assert_eq!(rgba[3], 0, "top-left corner must be transparent");
+        assert_eq!(rgba[rgba.len() - 1], 0, "bottom-right corner must be transparent");
+        assert_eq!(rgba[pixel(70.0, 120.0) + 3], 255, "body must be opaque");
+        assert_eq!(rgba[pixel(70.0, 25.0) + 3], 255, "cap must be opaque");
+        assert_eq!(rgba[pixel(52.0, 144.0) + 3], 255, "feet must be opaque");
+        assert_eq!(rgba[pixel(52.0, 72.0) + 3], 0, "left eye must be a hole");
+        assert_eq!(rgba[pixel(88.0, 72.0) + 3], 0, "right eye must be a hole");
     }
 }

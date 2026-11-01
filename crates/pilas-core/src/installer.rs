@@ -1,17 +1,16 @@
-//! Fusión de los hooks de Pilas en `settings.json` de Claude Code. Sin IO: recibe y devuelve `Value`.
-//! Referencia: https://code.claude.com/docs/en/hooks (forma exec: `command` + `args`).
+//! Merges the Pilas hooks into Claude Code's `settings.json`. No IO: takes and returns `Value`.
+//! Reference: https://code.claude.com/docs/en/hooks (exec form: `command` + `args`).
 //!
-//! Los hooks de Pilas se reconocen por su `command`: la ruta exacta del binario o
-//! cualquier ruta que termine en `/Pilas/bin/pilas-hook` (instalaciones anteriores).
+//! Pilas hooks are recognised by their `command`: the exact binary path or
+//! any path ending in `/Pilas/bin/pilas-hook` (earlier installs).
 
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 use thiserror::Error;
 
-/// Sufijo que identifica un hook de Pilas aunque la ruta del binario haya cambiado.
 const PILAS_BIN_SUFFIX: &str = "/Pilas/bin/pilas-hook";
 
-/// Eventos que Pilas escucha: (evento, lleva `matcher` "*", `timeout` en segundos).
+/// (event, has `matcher` "*", `timeout` in seconds).
 const EVENTS: &[(&str, bool, Option<u64>)] = &[
     ("SessionStart", false, None),
     ("UserPromptSubmit", false, None),
@@ -26,11 +25,11 @@ const EVENTS: &[(&str, bool, Option<u64>)] = &[
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum InstallError {
-    #[error("settings.json debe ser un objeto JSON")]
+    #[error("settings.json must be a JSON object")]
     NotObject,
-    #[error("\"hooks\" debe ser un objeto JSON")]
+    #[error("\"hooks\" must be a JSON object")]
     HooksNotObject,
-    #[error("hooks.{0} debe ser un array")]
+    #[error("hooks.{0} must be an array")]
     EventNotArray(String),
 }
 
@@ -42,14 +41,13 @@ pub enum HookStatus {
     NeedsRepair,
 }
 
-/// Una línea del diff: `' '` igual, `'+'` añadida, `'-'` quitada.
+/// `op`: `' '` unchanged, `'+'` added, `'-'` removed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DiffLine {
     pub op: char,
     pub text: String,
 }
 
-/// Grupos (evento, entrada) que Pilas añade para `hook_path`.
 fn pilas_groups(hook_path: &str) -> Vec<(&'static str, Value)> {
     EVENTS
         .iter()
@@ -74,8 +72,8 @@ fn is_pilas(hook: &Value, hook_path: &str) -> bool {
         .is_some_and(|c| c == hook_path || c.ends_with(PILAS_BIN_SUFFIX))
 }
 
-/// Quita los hooks de Pilas. Solo limpia lo que quedó vacío por esa quitada:
-/// arrays de evento, grupos y el objeto `hooks`. Lo ajeno no se toca.
+/// Only cleans up what this removal left empty (event arrays, groups, the `hooks`
+/// object); anything not ours is left untouched.
 fn strip_pilas(obj: &mut Map<String, Value>, hook_path: &str) -> Result<(), InstallError> {
     let Some(hooks_val) = obj.get_mut("hooks") else {
         return Ok(());
@@ -117,7 +115,7 @@ fn strip_pilas(obj: &mut Map<String, Value>, hook_path: &str) -> Result<(), Inst
     Ok(())
 }
 
-/// Añade los hooks de Pilas, quitando antes los suyos previos (sin duplicar ni reordenar lo ajeno).
+/// Removes earlier Pilas hooks first, so nothing is duplicated and foreign hooks keep their order.
 pub fn install(settings: &Value, hook_path: &str) -> Result<Value, InstallError> {
     let mut out = settings.clone();
     let obj = out.as_object_mut().ok_or(InstallError::NotObject)?;
@@ -138,7 +136,6 @@ pub fn install(settings: &Value, hook_path: &str) -> Result<Value, InstallError>
     Ok(out)
 }
 
-/// Quita solo los hooks de Pilas.
 pub fn uninstall(settings: &Value, hook_path: &str) -> Result<Value, InstallError> {
     let mut out = settings.clone();
     let obj = out.as_object_mut().ok_or(InstallError::NotObject)?;
@@ -146,8 +143,8 @@ pub fn uninstall(settings: &Value, hook_path: &str) -> Result<Value, InstallErro
     Ok(out)
 }
 
-/// `Ok` si instalar no cambiaría nada; `Missing` si no hay ningún hook de Pilas;
-/// `NeedsRepair` en el resto (entradas viejas, incompletas o en otro orden).
+/// `Ok` if installing would change nothing; `Missing` if there is no Pilas hook;
+/// `NeedsRepair` otherwise (old, incomplete or reordered entries).
 pub fn status(settings: &Value, hook_path: &str) -> HookStatus {
     let Ok(expected) = install(settings, hook_path) else {
         return HookStatus::NeedsRepair;
@@ -155,7 +152,7 @@ pub fn status(settings: &Value, hook_path: &str) -> HookStatus {
     if &expected == settings {
         return HookStatus::Ok;
     }
-    // quitar cambia algo solo si había hooks de Pilas
+    // Uninstalling changes something only if Pilas hooks were present.
     if uninstall(settings, hook_path).ok().as_ref() == Some(settings) {
         HookStatus::Missing
     } else {
@@ -163,12 +160,12 @@ pub fn status(settings: &Value, hook_path: &str) -> HookStatus {
     }
 }
 
-/// Diff por líneas (LCS). Pensado para JSON pequeño: O(n·m) en memoria.
+/// Line diff (LCS). Meant for small JSON: O(n·m) memory.
 pub fn line_diff(before: &str, after: &str) -> Vec<DiffLine> {
     let a: Vec<&str> = before.lines().collect();
     let b: Vec<&str> = after.lines().collect();
     let (n, m) = (a.len(), b.len());
-    // lcs[i][j] = longitud de la subsecuencia común más larga de a[i..] y b[j..]
+    // lcs[i][j] = length of the longest common subsequence of a[i..] and b[j..]
     let mut lcs = vec![vec![0usize; m + 1]; n + 1];
     for i in (0..n).rev() {
         for j in (0..m).rev() {
@@ -236,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn instala_en_objeto_vacio_con_los_nueve_eventos() {
+    fn installs_nine_events_into_empty_object() {
         let out = install(&json!({}), BIN).unwrap();
         let hooks = out["hooks"].as_object().unwrap();
         assert_eq!(hooks.len(), 9);
@@ -251,98 +248,97 @@ mod tests {
     }
 
     #[test]
-    fn conserva_hooks_ajenos_y_su_orden_y_otras_claves() {
-        let ajeno = json!({ "hooks": [{ "type": "command", "command": "/usr/bin/lint" }] });
+    fn keeps_foreign_hooks_their_order_and_other_keys() {
+        let foreign = json!({ "hooks": [{ "type": "command", "command": "/usr/bin/lint" }] });
         let settings = json!({
             "model": "opus",
-            "hooks": { "Stop": [ajeno.clone()] }
+            "hooks": { "Stop": [foreign.clone()] }
         });
         let out = install(&settings, BIN).unwrap();
         assert_eq!(out["model"], "opus");
         let stop = out["hooks"]["Stop"].as_array().unwrap();
-        assert_eq!(stop[0], ajeno);
+        assert_eq!(stop[0], foreign);
         assert_eq!(stop.len(), 2);
     }
 
     #[test]
-    fn conserva_el_orden_de_las_claves() {
+    fn keeps_key_order() {
         let settings: Value =
             serde_json::from_str(r#"{"z":1,"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/x"}]}]},"a":2}"#)
                 .unwrap();
-        let instalado = install(&settings, BIN).unwrap();
-        let claves: Vec<&String> = instalado.as_object().unwrap().keys().collect();
-        assert_eq!(claves, vec!["z", "hooks", "a"]);
-        let sin = uninstall(&instalado, BIN).unwrap();
-        let claves: Vec<&String> = sin.as_object().unwrap().keys().collect();
-        assert_eq!(claves, vec!["z", "hooks", "a"]);
-        assert_eq!(sin, settings);
+        let installed = install(&settings, BIN).unwrap();
+        let keys: Vec<&String> = installed.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["z", "hooks", "a"]);
+        let stripped = uninstall(&installed, BIN).unwrap();
+        let keys: Vec<&String> = stripped.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["z", "hooks", "a"]);
+        assert_eq!(stripped, settings);
     }
 
     #[test]
-    fn instalar_dos_veces_es_idempotente() {
-        let ajeno = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "/x" }] }] } });
-        let una = install(&ajeno, BIN).unwrap();
-        let dos = install(&una, BIN).unwrap();
-        assert_eq!(una, dos);
-        assert_eq!(count_pilas(&dos), 9);
+    fn installing_twice_is_idempotent() {
+        let foreign = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "/x" }] }] } });
+        let once = install(&foreign, BIN).unwrap();
+        let twice = install(&once, BIN).unwrap();
+        assert_eq!(once, twice);
+        assert_eq!(count_pilas(&twice), 9);
     }
 
     #[test]
-    fn reemplaza_rutas_antiguas_de_pilas_sin_duplicar() {
-        let vieja = "/Applications/Pilas.app/Contents/Pilas/bin/pilas-hook";
-        let con_vieja = install(&json!({}), vieja).unwrap();
-        let nueva = install(&con_vieja, BIN).unwrap();
-        assert_eq!(count_pilas(&nueva), 9);
-        assert_eq!(nueva, install(&json!({}), BIN).unwrap());
+    fn replaces_old_pilas_paths_without_duplicating() {
+        let old = "/Applications/Pilas.app/Contents/Pilas/bin/pilas-hook";
+        let with_old = install(&json!({}), old).unwrap();
+        let new = install(&with_old, BIN).unwrap();
+        assert_eq!(count_pilas(&new), 9);
+        assert_eq!(new, install(&json!({}), BIN).unwrap());
     }
 
     #[test]
-    fn uninstall_deja_ajenos_y_otras_claves() {
-        let ajeno = json!({ "hooks": [{ "type": "command", "command": "/usr/bin/lint" }] });
-        let settings = json!({ "theme": "dark", "hooks": { "Stop": [ajeno] } });
-        let instalado = install(&settings, BIN).unwrap();
-        let out = uninstall(&instalado, BIN).unwrap();
+    fn uninstall_keeps_foreign_hooks_and_other_keys() {
+        let foreign = json!({ "hooks": [{ "type": "command", "command": "/usr/bin/lint" }] });
+        let settings = json!({ "theme": "dark", "hooks": { "Stop": [foreign] } });
+        let installed = install(&settings, BIN).unwrap();
+        let out = uninstall(&installed, BIN).unwrap();
         assert_eq!(out, settings);
     }
 
     #[test]
-    fn uninstall_quita_hooks_object_si_queda_vacio() {
-        let instalado = install(&json!({ "theme": "dark" }), BIN).unwrap();
-        let out = uninstall(&instalado, BIN).unwrap();
+    fn uninstall_drops_empty_hooks_object() {
+        let installed = install(&json!({ "theme": "dark" }), BIN).unwrap();
+        let out = uninstall(&installed, BIN).unwrap();
         assert_eq!(out, json!({ "theme": "dark" }));
     }
 
     #[test]
-    fn uninstall_sin_hooks_de_pilas_no_cambia_nada() {
+    fn uninstall_without_pilas_hooks_changes_nothing() {
         let settings = json!({ "hooks": {} });
         assert_eq!(uninstall(&settings, BIN).unwrap(), settings);
     }
 
     #[test]
-    fn status_cubre_los_tres_casos() {
-        let vacio = json!({});
-        assert_eq!(status(&vacio, BIN), HookStatus::Missing);
-        let instalado = install(&vacio, BIN).unwrap();
-        assert_eq!(status(&instalado, BIN), HookStatus::Ok);
-        let mut roto = instalado.clone();
-        roto["hooks"]["Stop"] = json!([]);
-        assert_eq!(status(&roto, BIN), HookStatus::NeedsRepair);
-        // ruta antigua de Pilas: cuenta como nuestra, pero no coincide
-        let vieja = install(&vacio, "/Applications/Pilas.app/Pilas/bin/pilas-hook").unwrap();
-        assert_eq!(status(&vieja, BIN), HookStatus::NeedsRepair);
-        // ruta ajena a Pilas: no es nuestra
-        let ajena = install(&vacio, "/otra/pilas-hook").unwrap();
-        assert_eq!(status(&ajena, BIN), HookStatus::Missing);
+    fn status_covers_three_cases() {
+        let empty = json!({});
+        assert_eq!(status(&empty, BIN), HookStatus::Missing);
+        let installed = install(&empty, BIN).unwrap();
+        assert_eq!(status(&installed, BIN), HookStatus::Ok);
+        let mut broken = installed.clone();
+        broken["hooks"]["Stop"] = json!([]);
+        assert_eq!(status(&broken, BIN), HookStatus::NeedsRepair);
+        // An old Pilas path counts as ours but does not match.
+        let old = install(&empty, "/Applications/Pilas.app/Pilas/bin/pilas-hook").unwrap();
+        assert_eq!(status(&old, BIN), HookStatus::NeedsRepair);
+        let foreign_path = install(&empty, "/other/pilas-hook").unwrap();
+        assert_eq!(status(&foreign_path, BIN), HookStatus::Missing);
     }
 
     #[test]
-    fn status_con_hooks_ajenos_solo_es_missing() {
-        let ajeno = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "/x" }] }] } });
-        assert_eq!(status(&ajeno, BIN), HookStatus::Missing);
+    fn status_with_only_foreign_hooks_is_missing() {
+        let foreign = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "/x" }] }] } });
+        assert_eq!(status(&foreign, BIN), HookStatus::Missing);
     }
 
     #[test]
-    fn entrada_no_objeto_es_error() {
+    fn non_object_input_is_error() {
         assert_eq!(install(&json!([]), BIN), Err(InstallError::NotObject));
         assert_eq!(install(&json!("x"), BIN), Err(InstallError::NotObject));
         assert_eq!(uninstall(&json!(1), BIN), Err(InstallError::NotObject));
@@ -355,14 +351,14 @@ mod tests {
     }
 
     #[test]
-    fn diff_basico() {
+    fn basic_diff() {
         let d = line_diff("a\nb\nc", "a\nB\nc\nd");
         let ops: Vec<(char, &str)> = d.iter().map(|l| (l.op, l.text.as_str())).collect();
         assert_eq!(ops, vec![(' ', "a"), ('-', "b"), ('+', "B"), (' ', "c"), ('+', "d")]);
     }
 
     #[test]
-    fn diff_de_textos_iguales_solo_tiene_contexto() {
+    fn diff_of_equal_texts_is_only_context() {
         let d = line_diff("x\ny", "x\ny");
         assert!(d.iter().all(|l| l.op == ' '));
         assert_eq!(d.len(), 2);
